@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maestro-swarm"
+version = "0.1.0"
+description = "Provider-agnostic orchestrator & instantiator of agent swarms (Anthropic, OpenAI, local LLMs, and sibling agents like I.S.A.A.C. and O.L.I.V.I.A.)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Matheus Soranzo", email = "matheussoranco@gmail.com" }]
+keywords = ["agents", "multi-agent", "swarm", "orchestration", "llm", "mcp", "local-llm"]
+
+# The core runtime is pure standard library — no required third-party deps.
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0"]
+# Native SDKs are optional; MAESTRO's own stdlib transport covers these
+# providers already, so install these only if you prefer the vendored clients.
+anthropic = ["anthropic>=0.39"]
+openai = ["openai>=1.40"]
+dev = ["pytest>=8.0", "ruff>=0.6", "PyYAML>=6.0"]
+all = ["PyYAML>=6.0"]
+
+[project.scripts]
+maestro = "maestro.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/maestro"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    # Non-ASCII punctuation in strings/docstrings (en-dashes, arrows, check-marks).
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    # Tool/JSON-schema class attributes are read-only signatures.
+    "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]

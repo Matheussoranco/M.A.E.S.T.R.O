@@ -1,0 +1,36 @@
+# A two-round debate adjudicated by a judge.  Good for hard questions where
+# cross-examination improves the answer.
+#
+# Run:  maestro run examples/debate_swarm.yaml "Should a small team build its own
+#       agent framework or adopt an existing one?"
+
+name: debate-swarm
+description: Two debaters argue across rounds; a judge delivers the verdict.
+topology: debate
+topology_params:
+  rounds: 2
+  judge: judge
+
+providers:
+  claude:
+    provider: anthropic
+    model: claude-sonnet-5
+
+agents:
+  - name: pro
+    type: llm
+    provider: claude
+    role: proponent
+    system_prompt: Argue in favor, concede nothing without reason.
+
+  - name: con
+    type: llm
+    provider: claude
+    role: opponent
+    system_prompt: Argue against, concede nothing without reason.
+
+  - name: judge
+    type: llm
+    provider: claude
+    role: impartial judge
+    system_prompt: Weigh both sides and deliver a decisive, reasoned verdict.

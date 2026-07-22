@@ -1,0 +1,45 @@
+# A mixed-provider research swarm: a strong cloud "lead" supervising cheaper /
+# local specialists.  Demonstrates per-agent providers and built-in tools.
+#
+# Run:  maestro run examples/research_swarm.yaml "Compare markerless vs marker-based
+#       motion capture for clinical gait analysis."
+
+name: research-swarm
+description: Supervisor coordinating a researcher, an analyst, and a critic.
+topology: supervisor
+topology_params:
+  supervisor: lead
+
+providers:
+  claude:
+    provider: anthropic
+    model: claude-sonnet-5
+  local:
+    provider: ollama
+    model: llama3.1
+
+agents:
+  - name: lead
+    type: llm
+    provider: claude
+    role: supervisor
+    system_prompt: Plan the investigation and synthesize the team's findings.
+
+  - name: researcher
+    type: llm
+    provider: local
+    role: researcher
+    system_prompt: Gather and organize the relevant facts.
+
+  - name: analyst
+    type: llm
+    provider: local
+    role: quantitative analyst
+    tools: [calc, now]
+    system_prompt: Reason quantitatively; use the calc tool for arithmetic.
+
+  - name: critic
+    type: llm
+    provider: claude
+    role: critic
+    system_prompt: Stress-test the plan and flag weak assumptions.

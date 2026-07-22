@@ -1,0 +1,19 @@
+{
+  "name": "local-ensemble",
+  "description": "A fully-local parallel ensemble on Ollama, reduced by an aggregator. No cloud, no keys. (JSON spec — needs no PyYAML.)",
+  "topology": "parallel",
+  "topology_params": { "aggregator": "reducer" },
+  "providers": {
+    "local": { "provider": "ollama", "model": "nemotron-3-nano:4b" }
+  },
+  "agents": [
+    { "name": "optimist", "type": "llm", "provider": "local", "role": "optimist",
+      "system_prompt": "Argue for why the idea will work." },
+    { "name": "skeptic", "type": "llm", "provider": "local", "role": "skeptic",
+      "system_prompt": "Argue for why the idea will fail." },
+    { "name": "pragmatist", "type": "llm", "provider": "local", "role": "pragmatist",
+      "system_prompt": "Focus on the concrete next step." },
+    { "name": "reducer", "type": "llm", "provider": "local", "role": "synthesizer",
+      "system_prompt": "Merge the perspectives into one balanced recommendation." }
+  ]
+}

@@ -1,0 +1,45 @@
+# A heterogeneous swarm that enlists the sibling projects as first-class members:
+#   - a Claude "lead" plans & synthesizes  (Anthropic, or echo-fallback with no key)
+#   - I.S.A.A.C. handles deep neuro-symbolic reasoning / program synthesis
+#   - O.L.I.V.I.A. handles research & study-style questions
+#
+# Run:  maestro run examples/isaac_olivia_swarm.yaml "Devise and sanity-check an
+#       approach to solve a novel ARC-AGI-2 task, then explain it for a student."
+#
+# I.S.A.A.C. / O.L.I.V.I.A. are invoked via their console scripts.  If they live
+# in separate virtualenvs, point MAESTRO at the right interpreter, e.g.:
+#   MAESTRO_ISAAC_CMD="C:/Users/mathe/Documents/Code/I.S.A.A.C/.venv/Scripts/python.exe -m isaac agent"
+#   MAESTRO_OLIVIA_CMD="C:/Users/mathe/Documents/Code/O.L.I.V.I.A/.venv/Scripts/python.exe -m olivia ask"
+
+name: isaac-olivia-swarm
+description: Claude lead coordinating I.S.A.A.C. (reasoning) and O.L.I.V.I.A. (research).
+topology: supervisor
+topology_params:
+  supervisor: lead
+
+providers:
+  claude:
+    provider: anthropic
+    model: claude-sonnet-5
+
+agents:
+  - name: lead
+    type: llm
+    provider: claude
+    role: supervisor
+    system_prompt: >
+      You are the conductor of a small expert swarm. Decompose the task, assign
+      the reasoning-heavy parts to I.S.A.A.C. and the research/teaching parts to
+      O.L.I.V.I.A., then integrate their work into one clear answer.
+
+  - name: isaac
+    type: isaac
+    role: neuro-symbolic reasoner
+    # mode: cli (default) runs `isaac agent "<task>"`; use mode: mcp for MCP.
+    timeout: 600
+
+  - name: olivia
+    type: olivia
+    role: researcher & tutor
+    subcommand: ask          # or "solve" for step-by-step STEM problems
+    timeout: 600
