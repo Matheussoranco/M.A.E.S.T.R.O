@@ -167,4 +167,7 @@ src/maestro/
 
 ## License
 
-MIT © 2026 Matheus Soranzo. Part of the I.S.A.A.C. / O.L.I.V.I.A. agent ecosystem.
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+© 2026 Matheus Soranzo. Part of the I.S.A.A.C. / O.L.I.V.I.A. agent ecosystem.
+
+You may use, modify, and share this software for any noncommercial purpose; commercial use is not permitted.

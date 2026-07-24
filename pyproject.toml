@@ -8,9 +8,12 @@ version = "0.1.0"
 description = "Provider-agnostic orchestrator & instantiator of agent swarms (Anthropic, OpenAI, local LLMs, and sibling agents like I.S.A.A.C. and O.L.I.V.I.A.)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "PolyForm-Noncommercial-1.0.0" }
 authors = [{ name = "Matheus Soranzo", email = "matheussoranco@gmail.com" }]
 keywords = ["agents", "multi-agent", "swarm", "orchestration", "llm", "mcp", "local-llm"]
+# PolyForm Noncommercial has no OSI classifier — "Other/Proprietary" is the
+# correct trove entry for a source-available, noncommercial-only licence.
+classifiers = ["License :: Other/Proprietary License"]
 
 # The core runtime is pure standard library — no required third-party deps.
 dependencies = []
