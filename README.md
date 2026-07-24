@@ -1,5 +1,7 @@
 # M.A.E.S.T.R.O.
 
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](LICENSE)
+
 **Multi-Agent Ensemble Swarm Task-Routing Orchestrator** — a provider-agnostic
 orchestrator that *instantiates and conducts agent swarms*, in the spirit of the
 multi-agent systems from MiniMax and Kimi, but open and yours to configure.
