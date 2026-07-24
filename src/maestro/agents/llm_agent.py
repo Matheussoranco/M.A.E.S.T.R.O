@@ -87,25 +87,23 @@ class LLMAgent(Agent):
                 messages, system=system, max_tokens=self.max_tokens, temperature=self.temperature
             )
             if resp.error:
-                return self._finish(
-                    context, AgentResult(self.name, self.role, error=resp.error)
-                )
+                return self._finish(context, AgentResult(self.name, self.role, error=resp.error))
             text = resp.text
             match = _ACTION_RE.search(text) if self.tools else None
             if not match:
                 return self._finish(
                     context,
                     AgentResult(
-                        self.name, self.role, output=text,
+                        self.name,
+                        self.role,
+                        output=text,
                         meta={"model": resp.model, "usage": resp.usage},
                     ),
                 )
             # Execute the requested tool and feed the observation back.
             tool_name, arg = match.group(1), match.group(2).strip()
             tool = self.tools.get(tool_name)
-            observation = (
-                tool.run(arg) if tool else f"error: unknown tool {tool_name!r}"
-            )
+            observation = tool.run(arg) if tool else f"error: unknown tool {tool_name!r}"
             if context is not None:
                 context.tracer.emit("tool_call", name=tool_name, detail=arg[:80])
             messages.append({"role": "assistant", "content": text})

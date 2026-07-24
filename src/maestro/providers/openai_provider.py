@@ -45,8 +45,7 @@ class OpenAICompatClient(LLMClient):
         if system:
             chat.append({"role": "system", "content": system})
         chat.extend(
-            {"role": m.get("role", "user"), "content": str(m.get("content", ""))}
-            for m in messages
+            {"role": m.get("role", "user"), "content": str(m.get("content", ""))} for m in messages
         )
         payload: dict = {"model": self.model, "messages": chat}
         if max_tokens:

@@ -37,8 +37,7 @@ class OllamaClient(LLMClient):
         if system:
             chat.append({"role": "system", "content": system})
         chat.extend(
-            {"role": m.get("role", "user"), "content": str(m.get("content", ""))}
-            for m in messages
+            {"role": m.get("role", "user"), "content": str(m.get("content", ""))} for m in messages
         )
         options: dict = {}
         if max_tokens:

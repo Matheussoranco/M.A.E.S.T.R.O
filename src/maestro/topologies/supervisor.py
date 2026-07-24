@@ -32,12 +32,20 @@ class SupervisorTopology(Topology):
         workers = [a for a in agents if a.name != supervisor.name]
         if not workers:
             res = supervisor.run(task, context)
-            return SwarmResult(task=task, final=res.output or res.error, topology=self.name,
-                               per_agent=[res], tracer=context.tracer,
-                               error="" if res.ok() else "supervisor produced no output")
+            return SwarmResult(
+                task=task,
+                final=res.output or res.error,
+                topology=self.name,
+                per_agent=[res],
+                tracer=context.tracer,
+                error="" if res.ok() else "supervisor produced no output",
+            )
 
-        context.tracer.emit("topology", name=self.name,
-                            detail=f"supervisor={supervisor.name}, {len(workers)} workers")
+        context.tracer.emit(
+            "topology",
+            name=self.name,
+            detail=f"supervisor={supervisor.name}, {len(workers)} workers",
+        )
 
         assignments = self._plan(task, supervisor, workers, context)
         results: list[AgentResult] = []
@@ -60,8 +68,12 @@ class SupervisorTopology(Topology):
         results.insert(0, synth)
         final = synth.output or "\n\n".join(f"[{r.name}] {r.output}" for r in results if r.ok())
         return SwarmResult(
-            task=task, final=final, topology=self.name, per_agent=results,
-            tracer=context.tracer, error="" if final.strip() else "no output produced",
+            task=task,
+            final=final,
+            topology=self.name,
+            per_agent=results,
+            tracer=context.tracer,
+            error="" if final.strip() else "no output produced",
         )
 
     # -- helpers --------------------------------------------------------------

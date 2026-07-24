@@ -15,8 +15,13 @@ from maestro.tools.base import FunctionTool, Tool
 
 # -- calculator (safe arithmetic via AST, no eval) ---------------------------
 _BINOPS = {
-    ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul, ast.Div: _op.truediv,
-    ast.FloorDiv: _op.floordiv, ast.Mod: _op.mod, ast.Pow: _op.pow,
+    ast.Add: _op.add,
+    ast.Sub: _op.sub,
+    ast.Mult: _op.mul,
+    ast.Div: _op.truediv,
+    ast.FloorDiv: _op.floordiv,
+    ast.Mod: _op.mod,
+    ast.Pow: _op.pow,
 }
 _UNARY = {ast.UAdd: _op.pos, ast.USub: _op.neg}
 
@@ -48,9 +53,7 @@ _BUILTINS: dict[str, Tool] = {
         "calc", "Evaluate a simple arithmetic expression, e.g. '2*(3+4)'.", _safe_eval
     ),
     "now": FunctionTool("now", "Return the current local date-time (ISO 8601).", _now),
-    "wordcount": FunctionTool(
-        "wordcount", "Count the words in the argument text.", _wordcount
-    ),
+    "wordcount": FunctionTool("wordcount", "Count the words in the argument text.", _wordcount),
 }
 
 

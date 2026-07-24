@@ -66,9 +66,10 @@ class CLIAgent(Agent):
             return self._finish(
                 context,
                 AgentResult(
-                    self.name, self.role,
+                    self.name,
+                    self.role,
                     error=f"command not found: {self.command[0]!r} "
-                          f"(configure the path, e.g. MAESTRO_ISAAC_CMD)",
+                    f"(configure the path, e.g. MAESTRO_ISAAC_CMD)",
                 ),
             )
         payload = self._payload(task, context)
@@ -113,7 +114,9 @@ class CLIAgent(Agent):
         return self._finish(
             context,
             AgentResult(
-                self.name, self.role, output=out,
+                self.name,
+                self.role,
+                output=out,
                 meta={"returncode": proc.returncode, "stderr": (proc.stderr or "")[-400:]},
             ),
         )

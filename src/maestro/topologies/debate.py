@@ -24,9 +24,12 @@ class DebateTopology(Topology):
             debaters = agents
             judge = None
 
-        context.tracer.emit("topology", name=self.name,
-                            detail=f"{len(debaters)} debaters, {rounds} rounds"
-                                   + (f", judge={judge.name}" if judge else ""))
+        context.tracer.emit(
+            "topology",
+            name=self.name,
+            detail=f"{len(debaters)} debaters, {rounds} rounds"
+            + (f", judge={judge.name}" if judge else ""),
+        )
 
         results: list[AgentResult] = []
         last_round: list[AgentResult] = []
@@ -63,6 +66,10 @@ class DebateTopology(Topology):
             error = "" if parts else "no debater produced output"
 
         return SwarmResult(
-            task=task, final=final, topology=self.name, per_agent=results,
-            tracer=context.tracer, error=error,
+            task=task,
+            final=final,
+            topology=self.name,
+            per_agent=results,
+            tracer=context.tracer,
+            error=error,
         )

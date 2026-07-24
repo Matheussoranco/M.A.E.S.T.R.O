@@ -26,9 +26,7 @@ class Orchestrator:
         self.settings = settings or default_settings
         problems = spec.validate()
         if problems:
-            raise ValueError(
-                "invalid swarm spec:\n  - " + "\n  - ".join(problems)
-            )
+            raise ValueError("invalid swarm spec:\n  - " + "\n  - ".join(problems))
         self.swarm = self._build()
 
     # -- constructors ---------------------------------------------------------
@@ -42,9 +40,7 @@ class Orchestrator:
 
     # -- build & run ----------------------------------------------------------
     def _build(self) -> Swarm:
-        agents = [
-            build_agent(ag, self.spec.providers, self.settings) for ag in self.spec.agents
-        ]
+        agents = [build_agent(ag, self.spec.providers, self.settings) for ag in self.spec.agents]
         topology = build_topology(self.spec.topology, **self.spec.topology_params)
         return Swarm(name=self.spec.name, agents=agents, topology=topology)
 

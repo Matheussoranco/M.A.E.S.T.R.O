@@ -20,9 +20,7 @@ from maestro.tools import build_tools
 AGENT_TYPES = ("llm", "cli", "mcp", "isaac", "olivia")
 
 
-def _provider_spec(
-    agent_spec: dict, providers: dict[str, ProviderSpec], settings
-) -> ProviderSpec:
+def _provider_spec(agent_spec: dict, providers: dict[str, ProviderSpec], settings) -> ProviderSpec:
     """Resolve an agent's provider reference into a concrete :class:`ProviderSpec`."""
     ref = agent_spec.get("provider")
     if isinstance(ref, dict):
@@ -79,10 +77,15 @@ def build_agent(
         if not spec.get("command"):
             raise ValueError(f"cli agent {name!r} requires a 'command'")
         return CLIAgent(
-            name=name, role=role, description=description,
-            command=spec["command"], input_mode=spec.get("input_mode", "arg"),
-            template=spec.get("template", "{task}"), cwd=spec.get("cwd"),
-            env=spec.get("env"), timeout=spec.get("timeout", 300.0),
+            name=name,
+            role=role,
+            description=description,
+            command=spec["command"],
+            input_mode=spec.get("input_mode", "arg"),
+            template=spec.get("template", "{task}"),
+            cwd=spec.get("cwd"),
+            env=spec.get("env"),
+            timeout=spec.get("timeout", 300.0),
             include_context=spec.get("include_context", False),
         )
 
@@ -90,24 +93,39 @@ def build_agent(
         if not spec.get("server_cmd") or not spec.get("tool"):
             raise ValueError(f"mcp agent {name!r} requires 'server_cmd' and 'tool'")
         return MCPAgent(
-            name=name, role=role, description=description,
-            server_cmd=spec["server_cmd"], tool=spec["tool"],
-            arg_key=spec.get("arg_key", "query"), extra_args=spec.get("extra_args"),
-            cwd=spec.get("cwd"), env=spec.get("env"), timeout=spec.get("timeout", 300.0),
+            name=name,
+            role=role,
+            description=description,
+            server_cmd=spec["server_cmd"],
+            tool=spec["tool"],
+            arg_key=spec.get("arg_key", "query"),
+            extra_args=spec.get("extra_args"),
+            cwd=spec.get("cwd"),
+            env=spec.get("env"),
+            timeout=spec.get("timeout", 300.0),
         )
 
     if atype == "isaac":
         return isaac_agent(
-            name=name, role=role or "deep-reasoner", mode=spec.get("mode", "cli"),
-            command=spec.get("command", ""), timeout=spec.get("timeout", 600.0),
-            cwd=spec.get("cwd"), settings=settings,
+            name=name,
+            role=role or "deep-reasoner",
+            mode=spec.get("mode", "cli"),
+            command=spec.get("command", ""),
+            timeout=spec.get("timeout", 600.0),
+            cwd=spec.get("cwd"),
+            settings=settings,
         )
 
     if atype == "olivia":
         return olivia_agent(
-            name=name, role=role or "researcher", mode=spec.get("mode", "cli"),
-            subcommand=spec.get("subcommand", "ask"), command=spec.get("command", ""),
-            timeout=spec.get("timeout", 600.0), cwd=spec.get("cwd"), settings=settings,
+            name=name,
+            role=role or "researcher",
+            mode=spec.get("mode", "cli"),
+            subcommand=spec.get("subcommand", "ask"),
+            command=spec.get("command", ""),
+            timeout=spec.get("timeout", 600.0),
+            cwd=spec.get("cwd"),
+            settings=settings,
         )
 
     raise ValueError(f"unknown agent type {atype!r}; choose one of {', '.join(AGENT_TYPES)}")

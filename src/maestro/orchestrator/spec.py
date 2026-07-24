@@ -117,16 +117,12 @@ class SwarmSpec:
                 problems.append(f"mcp agent {name!r} needs 'server_cmd' and 'tool'")
             ref = ag.get("provider")
             if isinstance(ref, str) and ref and ref not in self.providers and ref not in PROVIDERS:
-                problems.append(
-                    f"agent {name!r} references unknown provider {ref!r}"
-                )
+                problems.append(f"agent {name!r} references unknown provider {ref!r}")
 
         for key in _AGENT_REF_PARAMS:
             ref = self.topology_params.get(key)
             if ref and ref not in seen:
-                problems.append(
-                    f"topology_params.{key} = {ref!r} does not match any agent name"
-                )
+                problems.append(f"topology_params.{key} = {ref!r} does not match any agent name")
         return problems
 
 
