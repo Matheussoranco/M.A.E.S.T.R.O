@@ -167,10 +167,24 @@ src/maestro/
 
 ## License
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-© 2026 Matheus Soranzo. Part of the I.S.A.A.C. / O.L.I.V.I.A. agent ecosystem.
+[**CC BY-NC-SA 4.0**](https://creativecommons.org/licenses/by-nc-sa/4.0/) — see [LICENSE](LICENSE).
 
-You may use, modify, and share this software for any noncommercial purpose, provided you
-keep the attribution and license anything you share onward — including modified versions —
-under these same terms (**ShareAlike**, i.e. copyleft). Commercial use is not permitted
-without separate written permission.
+Copyright © 2026 Matheus Soranzo <matheussoranco@gmail.com>
+`SPDX-License-Identifier: CC-BY-NC-SA-4.0`
+Part of the I.S.A.A.C. / O.L.I.V.I.A. agent ecosystem.
+
+You may use, study, modify and share M.A.E.S.T.R.O. for any noncommercial
+purpose, on three conditions:
+
+- **NonCommercial** — not primarily for or directed towards commercial advantage
+  or monetary compensation (§1(k)).
+- **ShareAlike** — anything you share onward, including modified versions, must
+  carry these same terms. This is a copyleft licence (§3(b)).
+- **Attribution** — keep the copyright notice, the licence reference and the
+  warranty disclaimer, say if you changed it, and link back where practicable (§3(a)).
+
+Commercial use requires separate written permission from the copyright holder.
+Note the licence grants no patent or trademark rights (§2(b)(2)).
+
+This project was previously MIT-licensed; anyone who received it under those
+terms keeps their MIT rights to that version.
