@@ -27,7 +27,10 @@ class SequentialTopology(Topology):
                 last_output = res.output
         final = last_output or (results[-1].error if results else "no agents ran")
         return SwarmResult(
-            task=task, final=final, topology=self.name,
-            per_agent=results, tracer=context.tracer,
+            task=task,
+            final=final,
+            topology=self.name,
+            per_agent=results,
+            tracer=context.tracer,
             error="" if last_output else "pipeline produced no output",
         )

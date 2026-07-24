@@ -24,7 +24,8 @@ class ParallelTopology(Topology):
         workers = self._worker_agents(agents, {aggregator_name} if aggregator else set())
 
         context.tracer.emit(
-            "topology", name=self.name,
+            "topology",
+            name=self.name,
             detail=f"{len(workers)} workers" + (" + aggregator" if aggregator else ""),
         )
 
@@ -33,9 +34,7 @@ class ParallelTopology(Topology):
         # Each worker gets an isolated child context view (shared blackboard) so
         # they don't prompt-contaminate each other, but still record results.
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {
-                pool.submit(w.run, task, context.child()): w for w in workers
-            }
+            futures = {pool.submit(w.run, task, context.child()): w for w in workers}
             for fut in futures:
                 results.append(fut.result())
 
@@ -58,6 +57,10 @@ class ParallelTopology(Topology):
             error = "" if parts else "no worker produced output"
 
         return SwarmResult(
-            task=task, final=final, topology=self.name,
-            per_agent=results, tracer=context.tracer, error=error,
+            task=task,
+            final=final,
+            topology=self.name,
+            per_agent=results,
+            tracer=context.tracer,
+            error=error,
         )

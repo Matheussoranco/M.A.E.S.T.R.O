@@ -32,8 +32,11 @@ class RouterTopology(Topology):
         context.tracer.emit("route", name=self.name, detail=f"→ {chosen.name}")
         res = chosen.run(task, context)
         return SwarmResult(
-            task=task, final=res.output or res.error, topology=self.name,
-            per_agent=[res], tracer=context.tracer,
+            task=task,
+            final=res.output or res.error,
+            topology=self.name,
+            per_agent=[res],
+            tracer=context.tracer,
             error="" if res.ok() else f"{chosen.name} produced no output",
         )
 

@@ -23,8 +23,7 @@ class Swarm:
         context.tracer.emit("swarm_start", name=self.name, detail=self.topology.name)
         context.post("user", task, role="user")
         result = self.topology.run(task, self.agents, context)
-        context.tracer.emit("swarm_end", name=self.name,
-                            detail=("ok" if result.ok() else "error"))
+        context.tracer.emit("swarm_end", name=self.name, detail=("ok" if result.ok() else "error"))
         result.tracer = context.tracer
         return result
 

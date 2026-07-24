@@ -40,8 +40,11 @@ def test_llm_agent_produces_output():
 def test_llm_agent_tool_loop_executes_tool():
     client = ScriptedClient(["ACTION: calc 2*(3+4)", "The result is 14."])
     agent = LLMAgent(
-        "calculator", client, role="analyst",
-        tools=[builtin_tools()["calc"]], max_tool_iters=3,
+        "calculator",
+        client,
+        role="analyst",
+        tools=[builtin_tools()["calc"]],
+        max_tool_iters=3,
     )
     ctx = RunContext(task="t")
     res = agent.run("what is 2*(3+4)?", ctx)
@@ -57,7 +60,8 @@ def test_cli_agent_availability():
 
 def test_cli_agent_arg_mode_runs():
     agent = CLIAgent(
-        "py", command=[sys.executable, "-c", "import sys; print('got ' + sys.argv[1])"],
+        "py",
+        command=[sys.executable, "-c", "import sys; print('got ' + sys.argv[1])"],
         input_mode="arg",
     )
     res = agent.run("hello")
@@ -67,7 +71,8 @@ def test_cli_agent_arg_mode_runs():
 
 def test_cli_agent_stdin_mode_runs():
     agent = CLIAgent(
-        "py", command=[sys.executable, "-c", "import sys; print(sys.stdin.read().strip().upper())"],
+        "py",
+        command=[sys.executable, "-c", "import sys; print(sys.stdin.read().strip().upper())"],
         input_mode="stdin",
     )
     res = agent.run("hello")

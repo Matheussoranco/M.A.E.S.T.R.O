@@ -56,20 +56,28 @@ def test_mcp_initialize_and_list():
 
 
 def test_mcp_tool_call_run_demo():
-    resp = server._handle({
-        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
-        "params": {"name": "maestro_run_demo", "arguments": {"task": "plan"}},
-    })
+    resp = server._handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "maestro_run_demo", "arguments": {"task": "plan"}},
+        }
+    )
     result = resp["result"]
     assert result["isError"] is False
     assert result["content"][0]["text"]
 
 
 def test_mcp_list_topologies_tool():
-    resp = server._handle({
-        "jsonrpc": "2.0", "id": 4, "method": "tools/call",
-        "params": {"name": "maestro_list_topologies", "arguments": {}},
-    })
+    resp = server._handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"name": "maestro_list_topologies", "arguments": {}},
+        }
+    )
     assert "supervisor" in resp["result"]["content"][0]["text"]
 
 

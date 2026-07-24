@@ -1,14 +1,14 @@
 """MAESTRO command-line interface (standard-library ``argparse`` only).
 
-    maestro demo                       run the offline demo swarm
-    maestro run <spec> "<task>"        instantiate a swarm from a spec and run it
-    maestro validate <spec>            check a spec without running it
-    maestro describe <spec>            show the swarm & agent availability
-    maestro providers                  list providers and which are configured
-    maestro topologies                 list available topologies
-    maestro agents                     list agent types and built-in tools
-    maestro mcp-serve                  expose MAESTRO itself over MCP (stdio)
-    maestro version
+maestro demo                       run the offline demo swarm
+maestro run <spec> "<task>"        instantiate a swarm from a spec and run it
+maestro validate <spec>            check a spec without running it
+maestro describe <spec>            show the swarm & agent availability
+maestro providers                  list providers and which are configured
+maestro topologies                 list available topologies
+maestro agents                     list agent types and built-in tools
+maestro mcp-serve                  expose MAESTRO itself over MCP (stdio)
+maestro version
 """
 
 from __future__ import annotations
@@ -38,8 +38,7 @@ def _emit_result(result, as_json: bool) -> None:
             "final": result.final,
             "error": result.error,
             "agents": [
-                {"name": r.name, "role": r.role, "ok": r.ok(),
-                 "output": r.output, "error": r.error}
+                {"name": r.name, "role": r.role, "ok": r.ok(), "output": r.output, "error": r.error}
                 for r in result.per_agent
             ],
             "trace": result.tracer.to_list() if result.tracer else [],

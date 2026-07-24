@@ -17,9 +17,7 @@ def build_tools(names: list[str] | None) -> list[Tool]:
     out: list[Tool] = []
     for name in names:
         if name not in registry:
-            raise ValueError(
-                f"unknown tool {name!r}; available: {', '.join(sorted(registry))}"
-            )
+            raise ValueError(f"unknown tool {name!r}; available: {', '.join(sorted(registry))}")
         out.append(registry[name])
     return out
 

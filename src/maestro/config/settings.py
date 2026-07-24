@@ -50,28 +50,30 @@ class Settings:
 
     # Endpoints for local / self-hosted back-ends.
     ollama_base_url: str = field(
-        default_factory=lambda: _env("MAESTRO_OLLAMA_BASE_URL", "OLLAMA_HOST",
-                                     default="http://localhost:11434")
+        default_factory=lambda: _env(
+            "MAESTRO_OLLAMA_BASE_URL", "OLLAMA_HOST", default="http://localhost:11434"
+        )
     )
     openai_base_url: str = field(
-        default_factory=lambda: _env("MAESTRO_OPENAI_BASE_URL", "OPENAI_BASE_URL",
-                                     default="https://api.openai.com/v1")
+        default_factory=lambda: _env(
+            "MAESTRO_OPENAI_BASE_URL", "OPENAI_BASE_URL", default="https://api.openai.com/v1"
+        )
     )
     anthropic_base_url: str = field(
-        default_factory=lambda: _env("MAESTRO_ANTHROPIC_BASE_URL",
-                                     default="https://api.anthropic.com")
+        default_factory=lambda: _env(
+            "MAESTRO_ANTHROPIC_BASE_URL", default="https://api.anthropic.com"
+        )
     )
     llamacpp_base_url: str = field(
-        default_factory=lambda: _env("MAESTRO_LLAMACPP_BASE_URL",
-                                     default="http://localhost:8080/v1")
+        default_factory=lambda: _env(
+            "MAESTRO_LLAMACPP_BASE_URL", default="http://localhost:8080/v1"
+        )
     )
 
     # When a requested provider is unavailable (missing key, unreachable host)
     # fall back to the deterministic offline ``echo`` backend instead of failing,
     # so a swarm's structure can always be exercised.  On by default.
-    allow_stub_fallback: bool = field(
-        default_factory=lambda: _bool("MAESTRO_ALLOW_STUB", True)
-    )
+    allow_stub_fallback: bool = field(default_factory=lambda: _bool("MAESTRO_ALLOW_STUB", True))
 
     # Per-request ceilings.
     request_timeout: float = field(
@@ -82,9 +84,7 @@ class Settings:
     # Commands used to enlist the sibling projects as swarm members.  Overridable
     # so users with per-project virtualenvs can point at the right interpreter,
     # e.g. ``MAESTRO_ISAAC_CMD="C:/…/I.S.A.A.C/.venv/Scripts/python.exe -m isaac agent"``.
-    isaac_cmd: str = field(
-        default_factory=lambda: _env("MAESTRO_ISAAC_CMD", default="isaac agent")
-    )
+    isaac_cmd: str = field(default_factory=lambda: _env("MAESTRO_ISAAC_CMD", default="isaac agent"))
     olivia_cmd: str = field(
         default_factory=lambda: _env("MAESTRO_OLIVIA_CMD", default="olivia ask")
     )

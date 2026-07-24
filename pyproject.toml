@@ -8,9 +8,12 @@ version = "0.1.0"
 description = "Provider-agnostic orchestrator & instantiator of agent swarms (Anthropic, OpenAI, local LLMs, and sibling agents like I.S.A.A.C. and O.L.I.V.I.A.)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "CC-BY-NC-SA-4.0" }
 authors = [{ name = "Matheus Soranzo", email = "matheussoranco@gmail.com" }]
 keywords = ["agents", "multi-agent", "swarm", "orchestration", "llm", "mcp", "local-llm"]
+# CC BY-NC-SA 4.0 has no OSI classifier - "Other/Proprietary" is the correct
+# trove entry for a source-available, noncommercial-only copyleft licence.
+classifiers = ["License :: Other/Proprietary License"]
 
 # The core runtime is pure standard library — no required third-party deps.
 dependencies = []
@@ -21,7 +24,7 @@ yaml = ["PyYAML>=6.0"]
 # providers already, so install these only if you prefer the vendored clients.
 anthropic = ["anthropic>=0.39"]
 openai = ["openai>=1.40"]
-dev = ["pytest>=8.0", "ruff>=0.6", "PyYAML>=6.0"]
+dev = ["pytest>=8.0", "ruff==0.15.2", "PyYAML>=6.0"]  # ruff pinned: see ci.yml
 all = ["PyYAML>=6.0"]
 
 [project.scripts]

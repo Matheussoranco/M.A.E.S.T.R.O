@@ -99,9 +99,9 @@ class EchoClient(LLMClient):
             if msg.get("role") == "user":
                 last_user = str(msg.get("content", ""))
                 break
-        digest = hashlib.sha1(
-            (system + "\n" + last_user).encode("utf-8", "replace")
-        ).hexdigest()[:8]
+        digest = hashlib.sha1((system + "\n" + last_user).encode("utf-8", "replace")).hexdigest()[
+            :8
+        ]
         who = self.persona or "echo"
         # A compact, deterministic "answer" that quotes the request back so the
         # reader can see the request actually reached this agent.

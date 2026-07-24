@@ -88,9 +88,7 @@ def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
             base_url=spec.base_url or s.ollama_base_url,
             timeout=timeout,
         )
-    raise ValueError(
-        f"unknown provider {spec.provider!r}; choose one of {', '.join(PROVIDERS)}"
-    )
+    raise ValueError(f"unknown provider {spec.provider!r}; choose one of {', '.join(PROVIDERS)}")
 
 
 def resolve_client(spec: ProviderSpec, settings=None) -> LLMClient:

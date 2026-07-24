@@ -65,8 +65,11 @@ class MCPAgent(Agent):
         if not self.available:
             return self._finish(
                 context,
-                AgentResult(self.name, self.role,
-                            error=f"MCP server command not found: {self.server_cmd[0]!r}"),
+                AgentResult(
+                    self.name,
+                    self.role,
+                    error=f"MCP server command not found: {self.server_cmd[0]!r}",
+                ),
             )
         try:
             text = self._call_tool(task)
@@ -96,11 +99,16 @@ class MCPAgent(Agent):
         reader = _LineReader(proc.stdout)
         reader.start()
         try:
-            self._send(proc, 1, "initialize", {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "maestro", "version": "0.1.0"},
-            })
+            self._send(
+                proc,
+                1,
+                "initialize",
+                {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "maestro", "version": "0.1.0"},
+                },
+            )
             self._await(reader, 1)
             self._notify(proc, "notifications/initialized")
             args = {self.arg_key: task, **self.extra_args}
@@ -115,9 +123,7 @@ class MCPAgent(Agent):
 
         content = (result or {}).get("content") or []
         texts = [
-            c.get("text", "")
-            for c in content
-            if isinstance(c, dict) and c.get("type") == "text"
+            c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"
         ]
         joined = "\n".join(t for t in texts if t)
         if not joined and result is not None:
@@ -125,17 +131,20 @@ class MCPAgent(Agent):
         return joined
 
     def _send(self, proc, mid: int, method: str, params: dict) -> None:
-        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": mid, "method": method,
-                                     "params": params}) + "\n")
+        proc.stdin.write(
+            json.dumps({"jsonrpc": "2.0", "id": mid, "method": method, "params": params}) + "\n"
+        )
         proc.stdin.flush()
 
     def _notify(self, proc, method: str, params: dict | None = None) -> None:
-        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": method,
-                                     "params": params or {}}) + "\n")
+        proc.stdin.write(
+            json.dumps({"jsonrpc": "2.0", "method": method, "params": params or {}}) + "\n"
+        )
         proc.stdin.flush()
 
     def _await(self, reader: _LineReader, mid: int) -> dict | None:
         import time
+
         deadline = time.time() + self.timeout
         while time.time() < deadline:
             line = reader.get(timeout=max(0.05, deadline - time.time()))

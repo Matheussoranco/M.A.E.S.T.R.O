@@ -98,7 +98,8 @@ def _handle(msg: dict) -> dict | None:
     method = msg.get("method")
     if method == "initialize":
         return {
-            "jsonrpc": "2.0", "id": mid,
+            "jsonrpc": "2.0",
+            "id": mid,
             "result": {
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": {"tools": {}},
@@ -116,8 +117,11 @@ def _handle(msg: dict) -> dict | None:
     if method == "ping":
         return {"jsonrpc": "2.0", "id": mid, "result": {}}
     if mid is not None:
-        return {"jsonrpc": "2.0", "id": mid,
-                "error": {"code": -32601, "message": f"method not found: {method}"}}
+        return {
+            "jsonrpc": "2.0",
+            "id": mid,
+            "error": {"code": -32601, "message": f"method not found: {method}"},
+        }
     return None
 
 

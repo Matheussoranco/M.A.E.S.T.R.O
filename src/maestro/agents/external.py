@@ -34,14 +34,24 @@ def isaac_agent(
     description = "I.S.A.A.C. — neuro-symbolic autonomous agent (ARC-AGI, program synthesis)."
     if mode == "mcp":
         return MCPAgent(
-            name=name, role=role, description=description,
-            server_cmd="isaac mcp-serve", tool="isaac_ask", arg_key="question", timeout=timeout,
+            name=name,
+            role=role,
+            description=description,
+            server_cmd="isaac mcp-serve",
+            tool="isaac_ask",
+            arg_key="question",
+            timeout=timeout,
             cwd=cwd,
         )
     cmd = shlex.split(command) if command else shlex.split(s.isaac_cmd)
     return CLIAgent(
-        name=name, role=role, description=description,
-        command=cmd, input_mode="arg", timeout=timeout, cwd=cwd,
+        name=name,
+        role=role,
+        description=description,
+        command=cmd,
+        input_mode="arg",
+        timeout=timeout,
+        cwd=cwd,
     )
 
 
@@ -60,8 +70,13 @@ def olivia_agent(
     description = "O.L.I.V.I.A. — study, learning & scientific-discovery agent."
     if mode == "mcp":
         return MCPAgent(
-            name=name, role=role, description=description,
-            server_cmd="olivia mcp-serve", tool="olivia_ask", arg_key="question", timeout=timeout,
+            name=name,
+            role=role,
+            description=description,
+            server_cmd="olivia mcp-serve",
+            tool="olivia_ask",
+            arg_key="question",
+            timeout=timeout,
             cwd=cwd,
         )
     if command:
@@ -71,6 +86,11 @@ def olivia_agent(
         # Respect an explicit subcommand override (ask vs solve).
         cmd = [base[0], subcommand] if base else ["olivia", subcommand]
     return CLIAgent(
-        name=name, role=role, description=description,
-        command=cmd, input_mode="arg", timeout=timeout, cwd=cwd,
+        name=name,
+        role=role,
+        description=description,
+        command=cmd,
+        input_mode="arg",
+        timeout=timeout,
+        cwd=cwd,
     )
