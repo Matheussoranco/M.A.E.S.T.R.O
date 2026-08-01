@@ -97,7 +97,12 @@ def resolve_client(spec: ProviderSpec, settings=None) -> LLMClient:
     client = get_client(spec, s)
     if client.available:
         return client
-    if s.allow_stub_fallback and spec.provider not in ("echo", "null"):
+    # Normalize the same way get_client() does, so "Null"/"NULL"/"null" are
+    # recognized alike — otherwise a differently-cased "null" (which must stay
+    # unavailable to force symbolic fallback) would be silently upgraded to a
+    # working EchoClient here.
+    provider = (spec.provider or "echo").lower().replace("-", "_")
+    if s.allow_stub_fallback and provider not in ("echo", "null"):
         logger.warning(
             "provider %r unavailable — falling back to deterministic 'echo' backend",
             spec.provider,

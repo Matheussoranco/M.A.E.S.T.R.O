@@ -74,3 +74,13 @@ def test_available_check_makes_no_network_call():
     # Point at an unroutable host; .available must still return instantly.
     c = OllamaClient(base_url="http://10.255.255.1:1")
     assert c.available is True  # availability is config-only, never a round-trip
+
+
+@pytest.mark.parametrize("spelling", ["null", "Null", "NULL", "nUlL"])
+def test_resolve_never_upgrades_null_regardless_of_case(spelling):
+    # "null" must always stay unavailable to force symbolic fallback — that
+    # contract should not depend on how the spec capitalizes the provider name.
+    s = Settings(allow_stub_fallback=True)
+    client = resolve_client(ProviderSpec(provider=spelling), s)
+    assert isinstance(client, NullClient)
+    assert not client.available

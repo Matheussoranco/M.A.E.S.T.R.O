@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "maestro-swarm"
-version = "0.1.0"
+version = "0.1.1"
 description = "Provider-agnostic orchestrator & instantiator of agent swarms (Anthropic, OpenAI, local LLMs, and sibling agents like I.S.A.A.C. and O.L.I.V.I.A.)."
 readme = "README.md"
 requires-python = ">=3.10"

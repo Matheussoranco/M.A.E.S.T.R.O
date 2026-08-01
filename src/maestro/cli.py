@@ -287,30 +287,60 @@ def cmd_init(args) -> int:
         _print(f"error: {out} already exists (use --force to overwrite)")
         return 2
 
-    # The supervisor topology needs to know which agent leads; default to the first.
-    topology_params = ""
-    if args.topology == "supervisor":
-        topology_params = f"topology_params:\n  supervisor: {roles[0]}\n"
+    description = f"A {args.topology} swarm of {len(roles)} agents."
 
-    agents_block = "".join(
-        _AGENT_TEMPLATE.format(
-            name=role,
-            role=role.replace("_", " "),
-            prompt=f"You are the {role.replace('_', ' ')}. Do your part of the task.",
+    if out.suffix.lower() == ".json":
+        # A .json target must contain valid JSON — the YAML template below is
+        # not parseable JSON, so build the equivalent structure directly.
+        import json
+
+        spec: dict = {
+            "name": args.name,
+            "description": description,
+            "topology": args.topology,
+            "providers": {"default": {"provider": args.provider, "model": args.model}},
+            "agents": [
+                {
+                    "name": role,
+                    "type": "llm",
+                    "provider": "default",
+                    "role": role.replace("_", " "),
+                    "system_prompt": (
+                        f"You are the {role.replace('_', ' ')}. Do your part of the task."
+                    ),
+                }
+                for role in roles
+            ],
+        }
+        # The supervisor topology needs to know which agent leads; default to the first.
+        if args.topology == "supervisor":
+            spec["topology_params"] = {"supervisor": roles[0]}
+        text = json.dumps(spec, indent=2, ensure_ascii=False) + "\n"
+    else:
+        # The supervisor topology needs to know which agent leads; default to the first.
+        topology_params = ""
+        if args.topology == "supervisor":
+            topology_params = f"topology_params:\n  supervisor: {roles[0]}\n"
+
+        agents_block = "".join(
+            _AGENT_TEMPLATE.format(
+                name=role,
+                role=role.replace("_", " "),
+                prompt=f"You are the {role.replace('_', ' ')}. Do your part of the task.",
+            )
+            for role in roles
         )
-        for role in roles
-    )
 
-    text = _INIT_TEMPLATE.format(
-        name=args.name,
-        filename=out.name,
-        description=f"A {args.topology} swarm of {len(roles)} agents.",
-        topology=args.topology,
-        topology_params=topology_params,
-        provider=args.provider,
-        model=args.model,
-        agents=agents_block,
-    )
+        text = _INIT_TEMPLATE.format(
+            name=args.name,
+            filename=out.name,
+            description=description,
+            topology=args.topology,
+            topology_params=topology_params,
+            provider=args.provider,
+            model=args.model,
+            agents=agents_block,
+        )
 
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
