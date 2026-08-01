@@ -46,6 +46,28 @@ def test_cli_validate_bad_spec_returns_1(tmp_path):
     assert main(["validate", str(path)]) == 1
 
 
+# -- init -----------------------------------------------------------------
+
+
+def test_cli_init_json_output_is_valid_json(tmp_path):
+    # A .json target must contain actual JSON, not the YAML template — this
+    # used to write YAML into a .json file, which then failed to parse.
+    out = tmp_path / "swarm.json"
+    assert main(["init", str(out), "--topology", "supervisor", "--agents", "lead,worker"]) == 0
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["topology"] == "supervisor"
+    assert data["topology_params"] == {"supervisor": "lead"}
+    assert [a["name"] for a in data["agents"]] == ["lead", "worker"]
+
+
+def test_cli_init_yaml_output_still_writes_yaml_template(tmp_path):
+    out = tmp_path / "swarm.yaml"
+    assert main(["init", str(out), "--topology", "sequential", "--agents", "a,b"]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert text.startswith("# ")
+    assert "topology: sequential" in text
+
+
 # -- MCP server ---------------------------------------------------------------
 def test_mcp_initialize_and_list():
     init = server._handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})

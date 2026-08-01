@@ -39,6 +39,12 @@ def test_invalid_spec_raises():
 def test_isaac_olivia_mixed_spec_builds():
     # Even without the sibling binaries installed, the swarm must *build*; the
     # external agents simply report unavailable until their CLIs are present.
+    # The command is pinned to a guaranteed-nonexistent binary rather than the
+    # default "isaac agent" / "olivia ask": on a machine that happens to have
+    # the real I.S.A.A.C./O.L.I.V.I.A. console scripts on PATH (e.g. a dev box
+    # with both sibling projects installed), the supervisor's fan-out would
+    # otherwise shell out to the *real* agents and turn this offline unit test
+    # into a slow, non-deterministic integration test.
     spec = {
         "name": "mix",
         "topology": "supervisor",
@@ -46,8 +52,8 @@ def test_isaac_olivia_mixed_spec_builds():
         "providers": {"stub": {"provider": "echo"}},
         "agents": [
             {"name": "lead", "type": "llm", "provider": "stub", "role": "supervisor"},
-            {"name": "isaac", "type": "isaac"},
-            {"name": "olivia", "type": "olivia"},
+            {"name": "isaac", "type": "isaac", "command": "definitely-not-a-real-binary-xyz"},
+            {"name": "olivia", "type": "olivia", "command": "definitely-not-a-real-binary-xyz"},
         ],
     }
     orch = Orchestrator.from_dict(spec)
