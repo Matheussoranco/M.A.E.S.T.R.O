@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from maestro.agents.base import Agent, AgentResult
 from maestro.swarm.context import RunContext
 from maestro.telemetry.tracer import Tracer
-from maestro.telemetry.usage import UsageTotals
+from maestro.telemetry.usage import Usage, UsageTotals
 
 
 @dataclass
@@ -25,22 +25,31 @@ class SwarmResult:
     per_agent: list[AgentResult] = field(default_factory=list)
     error: str = ""
     tracer: Tracer | None = None
+    #: Every backend call made during the run, as ``(agent_name, usage)``,
+    #: attached by :meth:`Swarm.run` from the run context's ledger.
+    usage_log: list[tuple[str, Usage]] = field(default_factory=list)
 
     def ok(self) -> bool:
         return not self.error and bool(self.final.strip())
 
     # -- token & cost accounting ---------------------------------------------
     def usage_totals(self, prices: dict[str, tuple[float, float]] | None = None) -> UsageTotals:
-        """Roll every agent's per-call usage up into one report.
+        """Roll the run's backend calls up into one token/cost report.
 
-        Computed from :attr:`per_agent`, so every topology gets it for free and
-        an agent that ran twice (a debate round, a supervisor synthesis) counts
-        twice — exactly as it was billed.  Pass *prices* to override or extend
-        the built-in price table for this call only.
+        Reads the run ledger (:attr:`usage_log`) when there is one, so calls
+        whose result the topology discarded — a supervisor's planning turn, a
+        router's routing turn — are still counted; they were still billed.
+        Falls back to the per-agent results for a :class:`SwarmResult` built by
+        hand.  Pass *prices* to override or extend the built-in price table for
+        this call only.
         """
-        by_agent: dict[str, list] = {}
-        for result in self.per_agent:
-            by_agent.setdefault(result.name, []).extend(result.usage)
+        by_agent: dict[str, list[Usage]] = {}
+        if self.usage_log:
+            for name, usage in self.usage_log:
+                by_agent.setdefault(name, []).append(usage)
+        else:
+            for result in self.per_agent:
+                by_agent.setdefault(result.name, []).extend(result.usage)
         return UsageTotals.from_agent_usage(by_agent, prices)
 
     @property

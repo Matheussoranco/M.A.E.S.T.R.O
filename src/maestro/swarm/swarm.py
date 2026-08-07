@@ -46,6 +46,7 @@ class Swarm:
         result = self.topology.run(task, self.agents, context)
         context.tracer.emit("swarm_end", name=self.name, detail=("ok" if result.ok() else "error"))
         result.tracer = context.tracer
+        result.usage_log = context.usage_log
         return result
 
     def agent_names(self) -> list[str]:

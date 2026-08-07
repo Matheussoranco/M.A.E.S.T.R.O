@@ -139,6 +139,11 @@ class LLMAgent(Agent):
             response = self.client.complete(messages, **kwargs)
 
         usage.append(response.usage)
+        if context is not None:
+            # Also record against the run ledger: this agent's result may be
+            # discarded by the topology (a supervisor's plan, a router's pick)
+            # but the call was still billed.
+            context.record_usage(self.name, response.usage)
         return response
 
     # -- run ------------------------------------------------------------------

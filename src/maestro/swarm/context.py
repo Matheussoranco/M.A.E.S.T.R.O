@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from maestro.swarm.blackboard import Blackboard
 from maestro.swarm.message import Message
 from maestro.telemetry.tracer import Tracer
+from maestro.telemetry.usage import Usage
 
 
 @dataclass
@@ -29,14 +30,25 @@ class RunContext:
     stream: bool = False
     #: Sink for streamed fragments, called as ``on_token(agent_name, text)``.
     on_token: Callable[[str, str], None] | None = None
-    #: Serializes the sink — parallel/supervisor topologies run agents in
-    #: threads, and interleaved fragments must not corrupt the consumer.
-    _token_lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+    #: Every backend call made during the run, as ``(agent_name, usage)``.
+    #: This is the authoritative billing record: a supervisor's planning call
+    #: and a router's routing call cost real tokens even though the topology
+    #: discards their results, so counting only surviving results would
+    #: under-report the bill.
+    usage_log: list[tuple[str, Usage]] = field(default_factory=list)
+    #: Serializes the sink and the ledger — parallel/supervisor topologies run
+    #: agents in threads, and interleaved writes must not corrupt either.
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def post(self, sender: str, content: str, role: str = "assistant", **meta) -> Message:
         msg = Message(sender=sender, content=content, role=role, meta=meta)
         self.blackboard.post(msg)
         return msg
+
+    def record_usage(self, sender: str, usage: Usage) -> None:
+        """Record one backend call against *sender* in the run ledger."""
+        with self._lock:
+            self.usage_log.append((sender, usage))
 
     def emit_token(self, sender: str, text: str) -> None:
         """Forward one streamed fragment to the sink, if there is one.
@@ -47,7 +59,7 @@ class RunContext:
         """
         if not text or self.on_token is None:
             return
-        with self._token_lock:
+        with self._lock:
             self.on_token(sender, text)
 
     def context_digest(self, limit: int = 6, width: int = 500) -> str:
@@ -69,7 +81,9 @@ class RunContext:
             depth=self.depth + 1,
             stream=self.stream,
             on_token=self.on_token,
-            # Share the parent's lock so concurrent children serialize against
-            # each other, not just against themselves.
-            _token_lock=self._token_lock,
+            # Children write into the parent's ledger, under the parent's lock,
+            # so concurrent workers serialize against each other rather than
+            # each keeping a private (and lost) tally.
+            usage_log=self.usage_log,
+            _lock=self._lock,
         )
