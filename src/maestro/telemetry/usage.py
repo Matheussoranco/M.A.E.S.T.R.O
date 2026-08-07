@@ -216,10 +216,14 @@ class UsageTotals:
         cost = self.cost
         if cost is None:
             money = "cost unknown"
-        elif self.cost_complete:
-            money = f"${cost:.6f}"
-        else:
+        elif self.unpriced_calls:
             money = f"${cost:.6f} (partial: {self.unpriced_calls} unpriced call(s))"
+        elif not self.tokens_complete:
+            # Everything we could measure was priced, but not everything was
+            # measured — so the figure is a floor, for a different reason.
+            money = f"${cost:.6f} (partial: some calls reported no usage)"
+        else:
+            money = f"${cost:.6f}"
         return f"{tokens}  {money}"
 
     def render(self) -> str:

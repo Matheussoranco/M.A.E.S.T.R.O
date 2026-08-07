@@ -1,0 +1,57 @@
+# Token and cost aggregation across a mixed-provider swarm.
+#
+#   maestro run examples/cost_report_swarm.yaml --usage \
+#     "Is it worth self-hosting a 70B model instead of paying per token?"
+#
+# The USAGE block totals input/output tokens and dollars, broken down per agent
+# and per provider — including the lead's *planning* turn, whose output the
+# supervisor topology discards but whose tokens you were still billed for.
+#
+# The point of this example is what MAESTRO does when it cannot know something.
+# Costs come from a price table matched against the model id, and a model that
+# is not in it is reported as *unpriced*, never as free — so a total is either
+# complete or explicitly marked partial. The `prices:` block below is how you
+# fill the gaps: local models (whose marginal cost really is ~0), gateways with
+# their own rate card, or a price newer than the built-in table.
+#
+# Run it with no API key and it still works: the cloud agents fall back to the
+# offline `echo` backend, which is priced at 0 here because computing it costs
+# nothing. Run `maestro prices` to see what ships known.
+
+name: cost-report-swarm
+description: Supervisor + two workers, reporting exactly what the run cost.
+topology: supervisor
+topology_params:
+  supervisor: lead
+
+providers:
+  claude:
+    provider: anthropic
+    model: claude-opus-5      # priced by the built-in table: $5 / $25 per Mtok
+  local:
+    provider: ollama
+    model: llama3.1           # not in the built-in table — priced below
+
+agents:
+  - name: lead
+    type: llm
+    provider: claude
+    role: supervisor
+    system_prompt: Decompose the question, then integrate the workers' findings.
+
+  - name: analyst
+    type: llm
+    provider: local
+    role: quantitative analyst
+    tools: [calc]
+    system_prompt: Do the arithmetic explicitly; use the calc tool for it.
+
+  - name: researcher
+    type: llm
+    provider: local
+    role: researcher
+    system_prompt: Gather the operational facts the analyst needs.
+
+prices:                       # US$ per MILLION tokens
+  llama3.1: { input: 0, output: 0 }   # self-hosted: no per-token charge
+  echo: { input: 0, output: 0 }       # the offline fallback backend

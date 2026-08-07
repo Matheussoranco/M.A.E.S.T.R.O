@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+
+import pytest
 
 from maestro.orchestrator.spec import SwarmSpec
+
+EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 
 def _good() -> dict:
@@ -61,3 +66,32 @@ def test_from_file_json_roundtrip(tmp_path):
     spec = SwarmSpec.from_file(str(path))
     assert spec.name == "s"
     assert spec.validate() == []
+
+
+# --------------------------------------------------------------------------- #
+# The bundled examples are documentation people copy — keep them working.
+# --------------------------------------------------------------------------- #
+
+
+def _example_paths() -> list[Path]:
+    if not EXAMPLES.is_dir():  # pragma: no cover - examples ship with the repo
+        return []
+    return sorted(p for p in EXAMPLES.iterdir() if p.suffix in {".yaml", ".yml", ".json"})
+
+
+@pytest.mark.parametrize("path", _example_paths(), ids=lambda p: p.name)
+def test_bundled_example_is_valid(path):
+    if path.suffix in {".yaml", ".yml"}:
+        pytest.importorskip("yaml", reason="YAML specs need the optional PyYAML extra")
+    spec = SwarmSpec.from_file(str(path))
+    assert spec.validate() == [], f"{path.name} is not a valid spec"
+    assert spec.description, f"{path.name} should describe itself for `maestro examples`"
+
+
+def test_examples_cover_every_topology():
+    """Each topology needs at least one worked example to copy from."""
+    pytest.importorskip("yaml", reason="most example specs are YAML")
+    from maestro.topologies import TOPOLOGIES
+
+    covered = {SwarmSpec.from_file(str(p)).topology for p in _example_paths()}
+    assert set(TOPOLOGIES) <= covered, f"no example for: {set(TOPOLOGIES) - covered}"

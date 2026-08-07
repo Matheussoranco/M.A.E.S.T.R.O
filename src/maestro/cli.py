@@ -8,11 +8,15 @@ maestro providers                  list providers and which are configured
 maestro topologies                 list available topologies
 maestro agents                     list agent types and built-in tools
 maestro tools [name] [arg]         list built-in tools, or run one
+maestro prices                     show the token price table used for costs
 maestro config [key]               show effective settings (redacted)
 maestro examples                   list the bundled example swarm specs
 maestro init [out.yaml]            scaffold a new swarm spec
 maestro mcp-serve                  expose MAESTRO itself over MCP (stdio)
 maestro version
+
+``run`` and ``demo`` also take ``--stream`` (print tokens as they arrive) and
+``--usage`` (print the token/cost report for the run).
 """
 
 from __future__ import annotations
@@ -32,7 +36,7 @@ def _print(*args) -> None:
         sys.stdout.buffer.write(text.encode("utf-8", "replace") + b"\n")
 
 
-def _emit_result(result, as_json: bool) -> None:
+def _emit_result(result, as_json: bool, usage: bool = False) -> None:
     if as_json:
         import json
 
@@ -45,6 +49,9 @@ def _emit_result(result, as_json: bool) -> None:
                 {"name": r.name, "role": r.role, "ok": r.ok(), "output": r.output, "error": r.error}
                 for r in result.per_agent
             ],
+            # Always included: consumers of the JSON should not have to ask for
+            # the bill, and its "unknown" fields are meaningful either way.
+            "usage": result.usage.as_dict(),
             "trace": result.tracer.to_list() if result.tracer else [],
         }
         _print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -53,9 +60,37 @@ def _emit_result(result, as_json: bool) -> None:
     _print(result.final or f"(no output — {result.error})")
     _print("\n=== SWARM ===")
     _print(result.summary())
+    if usage:
+        _print("\n=== USAGE ===")
+        _print(result.usage.render())
     if result.tracer:
         _print("\n=== TRACE ===")
         _print(result.tracer.render())
+
+
+def _token_printer():
+    """A sink that prints streamed fragments, tagging each change of speaker."""
+    state = {"who": ""}
+
+    def on_token(agent: str, text: str) -> None:
+        if agent != state["who"]:
+            state["who"] = agent
+            sys.stdout.write(f"\n[{agent}] ")
+        sys.stdout.write(text)
+        sys.stdout.flush()
+
+    return on_token
+
+
+def _run_swarm(orch, task: str, args):
+    """Run a swarm, honouring --stream, and return the result."""
+    stream = getattr(args, "stream", False)
+    if not stream:
+        return orch.run(task, trace=not getattr(args, "no_trace", False))
+    _print("=== STREAM ===")
+    result = orch.run(task, trace=not getattr(args, "no_trace", False), on_token=_token_printer())
+    _print("")
+    return result
 
 
 def cmd_run(args) -> int:
@@ -66,8 +101,8 @@ def cmd_run(args) -> int:
     except Exception as exc:
         _print(f"error: {exc}")
         return 2
-    result = orch.run(args.task, trace=not args.no_trace)
-    _emit_result(result, args.json)
+    result = _run_swarm(orch, args.task, args)
+    _emit_result(result, args.json, args.usage)
     return 0 if result.ok() else 1
 
 
@@ -102,10 +137,13 @@ def cmd_describe(args) -> int:
 
 
 def cmd_demo(args) -> int:
-    from maestro.demo import run_demo
+    from maestro.demo import demo_spec
+    from maestro.orchestrator import Orchestrator
 
-    result = run_demo(args.task) if args.task else run_demo()
-    _emit_result(result, args.json)
+    orch = Orchestrator.from_dict(demo_spec())
+    task = args.task or "Design a plan to evaluate a new AI agent on ARC-AGI-2."
+    result = _run_swarm(orch, task, args)
+    _emit_result(result, args.json, args.usage)
     return 0 if result.ok() else 1
 
 
@@ -119,6 +157,22 @@ def cmd_providers(_args) -> int:
     _print("\nEnvironment (redacted):")
     for k, v in settings.redacted().items():
         _print(f"  {k}: {v}")
+    return 0
+
+
+def cmd_prices(_args) -> int:
+    from maestro.telemetry.usage import known_prices
+
+    prices = known_prices()
+    _print("Token prices (US$ per million tokens, matched as a substring of the model id):")
+    for model in sorted(prices):
+        inp, out = prices[model]
+        _print(f"  {model:<24} in ${inp:>7.2f}   out ${out:>7.2f}")
+    _print(
+        "\nModels not listed here are *unpriced*, not free: their cost is reported as\n"
+        "unknown. Add one with a spec 'prices:' block, or with\n"
+        "maestro.telemetry.usage.register_price(model, input, output)."
+    )
     return 0
 
 
@@ -376,6 +430,8 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("task", help="the task for the swarm")
     pr.add_argument("--no-trace", action="store_true", help="disable the run trace")
     pr.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    pr.add_argument("--stream", action="store_true", help="print tokens as they arrive")
+    pr.add_argument("--usage", action="store_true", help="print the token/cost report")
     pr.set_defaults(func=cmd_run)
 
     pv = sub.add_parser("validate", help="validate a spec without running it")
@@ -389,12 +445,18 @@ def build_parser() -> argparse.ArgumentParser:
     pm = sub.add_parser("demo", help="run the built-in offline demo swarm")
     pm.add_argument("task", nargs="?", default="", help="optional custom task")
     pm.add_argument("--json", action="store_true")
+    pm.add_argument("--stream", action="store_true", help="print tokens as they arrive")
+    pm.add_argument("--usage", action="store_true", help="print the token/cost report")
+    pm.add_argument("--no-trace", action="store_true", help="disable the run trace")
     pm.set_defaults(func=cmd_demo)
 
     sub.add_parser("providers", help="list providers and configuration").set_defaults(
         func=cmd_providers
     )
     sub.add_parser("topologies", help="list topologies").set_defaults(func=cmd_topologies)
+    sub.add_parser("prices", help="show the token price table used for cost totals").set_defaults(
+        func=cmd_prices
+    )
     sub.add_parser("agents", help="list agent types and tools").set_defaults(func=cmd_agents)
     sub.add_parser("mcp-serve", help="expose MAESTRO over MCP (stdio)").set_defaults(
         func=cmd_mcp_serve

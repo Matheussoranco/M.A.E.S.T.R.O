@@ -1,0 +1,62 @@
+# Router topology: pick the one specialist that fits, and run only it.
+#
+#   maestro run examples/support_router_swarm.yaml \
+#     "The billing page charged me twice for the same invoice."
+#
+# Cheap by construction — one agent answers, not the whole team. Useful when a
+# task clearly belongs to a single specialist and fanning out would just pay for
+# three opinions you were never going to read.
+#
+# Routing happens in one of two ways. With a `router` agent named below, that
+# agent is asked to choose; if it cannot (or is offline), routing falls back to
+# keyword overlap against each candidate's name, role and description. That
+# fallback is why the roles here are written with the words a real request would
+# use — they are matched against, not just documentation.
+#
+# Compare the cost of this against examples/cost_report_swarm.yaml with --usage:
+# a router run bills the routing turn plus one specialist, not N specialists.
+
+name: support-router-swarm
+description: Route a support request to the single best-suited specialist.
+topology: router
+topology_params:
+  router: triage
+
+providers:
+  fast:
+    provider: anthropic
+    model: claude-haiku-4-5     # routing is a cheap classification job
+  main:
+    provider: anthropic
+    model: claude-opus-5
+
+agents:
+  - name: triage
+    type: llm
+    provider: fast
+    role: dispatcher
+    system_prompt: >
+      Choose the single best-suited agent for the request. Reply with only that
+      agent's name.
+
+  - name: billing
+    type: llm
+    provider: main
+    role: billing, invoices, refunds, charges and payment specialist
+    tools: [calc]
+    system_prompt: >
+      Resolve billing questions. Show any arithmetic using the calc tool.
+
+  - name: technical
+    type: llm
+    provider: main
+    role: bugs, errors, crashes, API and integration specialist
+    system_prompt: >
+      Diagnose the technical fault. Ask for the smallest reproduction you need.
+
+  - name: account
+    type: llm
+    provider: main
+    role: login, password, access, permissions and account specialist
+    system_prompt: >
+      Resolve access and account problems without ever asking for a password.
