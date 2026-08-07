@@ -138,7 +138,9 @@ def test_refusal_stop_reason_becomes_an_error(monkeypatch):
     assert not resp.ok()
     assert "refused" in resp.error and "cyber" in resp.error
     assert resp.text == ""
-    assert resp.usage["prompt_tokens"] == 9
+    # A refusal still costs input tokens; they must survive onto the response.
+    assert resp.usage.input_tokens == 9
+    assert resp.usage.output_tokens == 0  # measured zero, not "unknown"
 
 
 def test_refusal_with_partial_content_still_errors(monkeypatch):

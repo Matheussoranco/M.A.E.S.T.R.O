@@ -10,10 +10,13 @@ This is the top-level entry point most callers use::
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from maestro.agents.registry import build_agent
 from maestro.config.settings import settings as default_settings
 from maestro.orchestrator.spec import SwarmSpec
 from maestro.swarm.swarm import Swarm
+from maestro.telemetry.usage import register_price
 from maestro.topologies import build_topology
 from maestro.topologies.base import SwarmResult
 
@@ -40,12 +43,23 @@ class Orchestrator:
 
     # -- build & run ----------------------------------------------------------
     def _build(self) -> Swarm:
+        # A spec may price the models it uses (local models, gateways, or a
+        # rate card newer than the built-in table) so cost reporting is not
+        # limited to the models MAESTRO happens to know.
+        for model, (inp, out) in self.spec.prices.items():
+            register_price(model, inp, out)
         agents = [build_agent(ag, self.spec.providers, self.settings) for ag in self.spec.agents]
         topology = build_topology(self.spec.topology, **self.spec.topology_params)
         return Swarm(name=self.spec.name, agents=agents, topology=topology)
 
-    def run(self, task: str, trace: bool = True) -> SwarmResult:
-        return self.swarm.run(task, trace=trace)
+    def run(
+        self,
+        task: str,
+        trace: bool = True,
+        on_token: Callable[[str, str], None] | None = None,
+        stream: bool | None = None,
+    ) -> SwarmResult:
+        return self.swarm.run(task, trace=trace, on_token=on_token, stream=stream)
 
     # -- introspection --------------------------------------------------------
     def describe(self) -> str:

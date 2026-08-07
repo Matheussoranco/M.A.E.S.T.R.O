@@ -13,6 +13,7 @@ import abc
 from dataclasses import dataclass, field
 
 from maestro.swarm.context import RunContext
+from maestro.telemetry.usage import Usage
 
 
 @dataclass
@@ -22,6 +23,10 @@ class AgentResult:
     output: str = ""
     error: str = ""
     meta: dict = field(default_factory=dict)
+    #: One entry per backend call this agent made — the raw material for the
+    #: swarm-level token/cost rollup.  Non-LLM agents (cli, mcp) leave it empty,
+    #: which the rollup reports as "no usage", never as zero.
+    usage: list[Usage] = field(default_factory=list)
 
     def ok(self) -> bool:
         return not self.error and bool(self.output.strip())

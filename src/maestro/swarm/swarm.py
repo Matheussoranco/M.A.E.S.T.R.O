@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from maestro.agents.base import Agent
 from maestro.swarm.context import RunContext
 from maestro.telemetry.tracer import Tracer
@@ -18,8 +20,27 @@ class Swarm:
         self.agents = agents
         self.topology = topology
 
-    def run(self, task: str, trace: bool = True) -> SwarmResult:
-        context = RunContext(task=task, tracer=Tracer(enabled=trace))
+    def run(
+        self,
+        task: str,
+        trace: bool = True,
+        on_token: Callable[[str, str], None] | None = None,
+        stream: bool | None = None,
+    ) -> SwarmResult:
+        """Conduct the swarm over *task*.
+
+        Pass *on_token* to receive streamed fragments as ``(agent_name, text)``
+        while the run proceeds; the returned :class:`SwarmResult` is identical
+        either way, so streaming never changes what a topology aggregates.
+        Streaming is enabled implicitly by passing a sink, or explicitly with
+        *stream* (useful to exercise the path with no consumer).
+        """
+        context = RunContext(
+            task=task,
+            tracer=Tracer(enabled=trace),
+            stream=bool(on_token) if stream is None else stream,
+            on_token=on_token,
+        )
         context.tracer.emit("swarm_start", name=self.name, detail=self.topology.name)
         context.post("user", task, role="user")
         result = self.topology.run(task, self.agents, context)

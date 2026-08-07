@@ -18,6 +18,8 @@ Example (YAML)::
       - {name: coder,  type: llm, provider: local,  role: engineer}
       - {name: isaac,  type: isaac}
       - {name: olivia, type: olivia}
+    prices:                       # optional; $ per million tokens
+      llama3.1: {input: 0, output: 0}
 """
 
 from __future__ import annotations
@@ -42,6 +44,10 @@ class SwarmSpec:
     topology_params: dict = field(default_factory=dict)
     providers: dict[str, ProviderSpec] = field(default_factory=dict)
     agents: list[dict] = field(default_factory=list)
+    #: ``{model_substring: (input_per_mtok, output_per_mtok)}`` in US dollars.
+    #: Lets a spec price models MAESTRO does not know — local models included,
+    #: where the honest number is usually ``0``.
+    prices: dict[str, tuple[float, float]] = field(default_factory=dict)
 
     # -- construction ---------------------------------------------------------
     @classmethod
@@ -64,6 +70,7 @@ class SwarmSpec:
             topology_params=dict(data.get("topology_params") or {}),
             providers=providers,
             agents=list(data.get("agents") or []),
+            prices=_parse_prices(data.get("prices")),
         )
 
     @classmethod
@@ -124,6 +131,33 @@ class SwarmSpec:
             if ref and ref not in seen:
                 problems.append(f"topology_params.{key} = {ref!r} does not match any agent name")
         return problems
+
+
+def _parse_prices(raw: object) -> dict[str, tuple[float, float]]:
+    """Parse a ``prices:`` block into ``{model: (input, output)}``.
+
+    Accepts either mapping form (``{input: 3, output: 15}``) or a two-item
+    sequence (``[3, 15]``).  Both are dollars per **million** tokens.
+    """
+    if not raw:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("'prices' must be a mapping of model -> {input, output}")
+    out: dict[str, tuple[float, float]] = {}
+    for model, entry in raw.items():
+        if isinstance(entry, dict):
+            values = (entry.get("input", 0), entry.get("output", 0))
+        elif isinstance(entry, (list, tuple)) and len(entry) == 2:
+            values = (entry[0], entry[1])
+        else:
+            raise ValueError(
+                f"price for {model!r} must be {{input: x, output: y}} or [x, y], got {entry!r}"
+            )
+        try:
+            out[str(model)] = (float(values[0]), float(values[1]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"price for {model!r} must be numeric") from exc
+    return out
 
 
 def _load_yaml(text: str, path: str) -> dict:

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from maestro.agents.base import Agent, AgentResult
 from maestro.swarm.context import RunContext
 from maestro.telemetry.tracer import Tracer
+from maestro.telemetry.usage import UsageTotals
 
 
 @dataclass
@@ -27,6 +28,25 @@ class SwarmResult:
 
     def ok(self) -> bool:
         return not self.error and bool(self.final.strip())
+
+    # -- token & cost accounting ---------------------------------------------
+    def usage_totals(self, prices: dict[str, tuple[float, float]] | None = None) -> UsageTotals:
+        """Roll every agent's per-call usage up into one report.
+
+        Computed from :attr:`per_agent`, so every topology gets it for free and
+        an agent that ran twice (a debate round, a supervisor synthesis) counts
+        twice — exactly as it was billed.  Pass *prices* to override or extend
+        the built-in price table for this call only.
+        """
+        by_agent: dict[str, list] = {}
+        for result in self.per_agent:
+            by_agent.setdefault(result.name, []).extend(result.usage)
+        return UsageTotals.from_agent_usage(by_agent, prices)
+
+    @property
+    def usage(self) -> UsageTotals:
+        """The run's token/cost totals, broken down per agent and per provider."""
+        return self.usage_totals()
 
     def summary(self) -> str:
         lines = [f"topology: {self.topology}", f"agents:   {len(self.per_agent)}"]
