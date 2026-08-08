@@ -1,0 +1,48 @@
+# Streaming, end to end through a pipeline.
+#
+#   maestro run examples/streaming_swarm.yaml --stream \
+#     "Explain why markerless motion capture is hard, for a physiotherapist."
+#
+# Each stage's tokens print as they are produced, tagged with the agent that is
+# speaking.  What the *next* stage receives is unchanged: streaming is purely
+# observational, so the pipeline aggregates exactly the same text it would have
+# without --stream.  Try it both ways and compare the FINAL block.
+#
+# Streaming works against every backend.  Anthropic, OpenAI-compatible gateways
+# and Ollama stream natively; anything else (including the offline `echo`
+# fallback used when no key is set) satisfies the same interface by delivering
+# the completion in one chunk.  You never have to ask first.
+
+name: streaming-swarm
+description: A draft -> critique -> polish pipeline that streams every stage.
+topology: sequential
+
+providers:
+  claude:
+    provider: anthropic
+    model: claude-opus-5
+
+agents:
+  - name: drafter
+    type: llm
+    provider: claude
+    role: writer
+    system_prompt: >
+      Write a first draft. Aim for substance over polish; the next agents will
+      sharpen it.
+
+  - name: critic
+    type: llm
+    provider: claude
+    role: critic
+    system_prompt: >
+      Critique the draft above. Name the weakest claim and the biggest omission.
+      Do not rewrite it.
+
+  - name: polisher
+    type: llm
+    provider: claude
+    role: editor
+    system_prompt: >
+      Produce the final version, addressing the critique. This is the answer the
+      user sees, so it must stand on its own.

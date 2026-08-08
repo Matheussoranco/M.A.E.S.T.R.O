@@ -70,7 +70,11 @@ def build_agent(
             max_tokens=spec.get("max_tokens", settings.max_tokens),
             temperature=spec.get("temperature"),
             tools=tools,
+            max_tool_iters=spec.get("max_tool_iters", 4),
             use_context=spec.get("use_context", True),
+            # Omitted ⇒ follow the backend's capability (native where supported,
+            # ReAct elsewhere).  Set it to pin one track explicitly.
+            native_tools=spec.get("native_tools"),
         )
 
     if atype == "cli":

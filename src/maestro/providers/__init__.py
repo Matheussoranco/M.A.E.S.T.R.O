@@ -14,7 +14,14 @@ from dataclasses import dataclass, field
 
 from maestro.config.settings import settings as default_settings
 from maestro.providers.anthropic_provider import AnthropicClient
-from maestro.providers.base import EchoClient, LLMClient, NullClient
+from maestro.providers.base import (
+    EchoClient,
+    LLMClient,
+    LLMResponse,
+    NullClient,
+    StreamEvent,
+    collect_stream,
+)
 from maestro.providers.ollama_provider import OllamaClient
 from maestro.providers.openai_provider import OpenAICompatClient
 
@@ -116,10 +123,13 @@ __all__ = [
     "AnthropicClient",
     "EchoClient",
     "LLMClient",
+    "LLMResponse",
     "NullClient",
     "OllamaClient",
     "OpenAICompatClient",
     "ProviderSpec",
+    "StreamEvent",
+    "collect_stream",
     "get_client",
     "resolve_client",
 ]

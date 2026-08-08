@@ -1,11 +1,70 @@
-"""Local Ollama backend (stdlib transport) — first-class local-LLM support."""
+"""Local Ollama backend (stdlib transport) — first-class local-LLM support.
+
+Ollama speaks the OpenAI *function* shape for tools but streams newline-
+delimited JSON rather than SSE, so both halves are implemented here rather than
+inherited from the OpenAI client.
+"""
 
 from __future__ import annotations
 
-from maestro.providers._http import post_json
-from maestro.providers.base import LLMClient, LLMResponse
+import json
+from collections.abc import Iterator
+
+from maestro.providers._http import HttpStreamError, post_json, stream_lines
+from maestro.providers.base import LLMClient, LLMResponse, StreamEvent
+from maestro.telemetry.usage import Usage
+from maestro.tools.schema import ToolCall, parse_arguments, to_ollama
 
 DEFAULT_MODEL = "llama3.1"
+
+
+def to_messages(messages: list[dict], system: str = "") -> list[dict]:
+    """Translate MAESTRO's neutral history into Ollama chat messages."""
+    chat: list[dict] = []
+    if system:
+        chat.append({"role": "system", "content": system})
+    for msg in messages:
+        role = msg.get("role", "user")
+        if role == "tool":
+            # Ollama identifies a result by position and (optionally) name; it
+            # has no tool_call_id, so the id is simply dropped here.
+            entry = {"role": "tool", "content": str(msg.get("content", ""))}
+            if msg.get("name"):
+                entry["tool_name"] = str(msg["name"])
+            chat.append(entry)
+            continue
+        calls = msg.get("tool_calls") or []
+        if role == "assistant" and calls:
+            chat.append(
+                {
+                    "role": "assistant",
+                    "content": str(msg.get("content", "") or ""),
+                    "tool_calls": [
+                        {"function": {"name": c.name, "arguments": c.arguments}} for c in calls
+                    ],
+                }
+            )
+            continue
+        chat.append({"role": role, "content": str(msg.get("content", ""))})
+    return chat
+
+
+def _parse_calls(raw_calls: list) -> list[ToolCall]:
+    calls: list[ToolCall] = []
+    for i, item in enumerate(raw_calls or []):
+        if not isinstance(item, dict):
+            continue
+        fn = item.get("function") or {}
+        calls.append(
+            ToolCall(
+                name=str(fn.get("name", "")),
+                arguments=parse_arguments(fn.get("arguments")),
+                # Ollama sends no correlation id; synthesize a stable one so the
+                # neutral history still pairs calls with their results.
+                id=str(item.get("id") or f"ollama-{i}"),
+            )
+        )
+    return calls
 
 
 class OllamaClient(LLMClient):
@@ -17,6 +76,8 @@ class OllamaClient(LLMClient):
     """
 
     name = "ollama"
+    supports_streaming = True
+    supports_tools = True
 
     def __init__(
         self,
@@ -32,32 +93,105 @@ class OllamaClient(LLMClient):
     def available(self) -> bool:
         return bool(self.base_url)
 
-    def complete(self, messages, system="", max_tokens=None, temperature=None) -> LLMResponse:
-        chat: list[dict] = []
-        if system:
-            chat.append({"role": "system", "content": system})
-        chat.extend(
-            {"role": m.get("role", "user"), "content": str(m.get("content", ""))} for m in messages
-        )
+    def _payload(self, messages, system, max_tokens, temperature, tools, stream: bool) -> dict:
         options: dict = {}
         if max_tokens:
             options["num_predict"] = max_tokens
         if temperature is not None:
             options["temperature"] = temperature
-        payload: dict = {"model": self.model, "messages": chat, "stream": False}
+        payload: dict = {
+            "model": self.model,
+            "messages": to_messages(messages, system),
+            "stream": stream,
+        }
         if options:
             payload["options"] = options
-        res = post_json(f"{self.base_url}/api/chat", payload, timeout=self.timeout)
-        if res.error:
-            return LLMResponse(model=self.model, error=res.error)
-        data = res.json()
-        text = (data.get("message") or {}).get("content", "") or ""
-        return LLMResponse(
-            text=text,
-            model=data.get("model", self.model),
-            usage={
-                "prompt_tokens": data.get("prompt_eval_count", 0),
-                "completion_tokens": data.get("eval_count", 0),
-            },
-            raw=data,
+        if tools:
+            payload["tools"] = to_ollama(tools)
+        return payload
+
+    def _usage(self, data: dict, model: str) -> Usage:
+        return Usage(
+            provider=self.name,
+            model=model,
+            input_tokens=data.get("prompt_eval_count"),
+            output_tokens=data.get("eval_count"),
         )
+
+    # -- completion -----------------------------------------------------------
+    def complete(
+        self, messages, system="", max_tokens=None, temperature=None, tools=None
+    ) -> LLMResponse:
+        res = post_json(
+            f"{self.base_url}/api/chat",
+            self._payload(messages, system, max_tokens, temperature, tools, stream=False),
+            timeout=self.timeout,
+        )
+        if res.error:
+            return LLMResponse(
+                model=self.model,
+                usage=Usage(provider=self.name, model=self.model),
+                error=res.error,
+            )
+        data = res.json()
+        message = data.get("message") or {}
+        model = data.get("model", self.model)
+        return LLMResponse(
+            text=message.get("content", "") or "",
+            model=model,
+            usage=self._usage(data, model),
+            raw=data,
+            tool_calls=_parse_calls(message.get("tool_calls") or []),
+            stop_reason=data.get("done_reason", "") or "",
+        )
+
+    # -- streaming ------------------------------------------------------------
+    def complete_stream(
+        self, messages, system="", max_tokens=None, temperature=None, tools=None
+    ) -> Iterator[StreamEvent]:
+        payload = self._payload(messages, system, max_tokens, temperature, tools, stream=True)
+        parts: list[str] = []
+        calls: list[ToolCall] = []
+        model = self.model
+        stop_reason = ""
+        final: dict = {}
+        try:
+            for line in stream_lines(f"{self.base_url}/api/chat", payload, timeout=self.timeout):
+                # Ollama streams NDJSON: one complete JSON object per line.
+                if not line.strip():
+                    continue
+                try:
+                    frame = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                model = frame.get("model", model)
+                message = frame.get("message") or {}
+                chunk = message.get("content") or ""
+                if chunk:
+                    parts.append(chunk)
+                    yield StreamEvent(text=chunk)
+                if message.get("tool_calls"):
+                    calls.extend(_parse_calls(message["tool_calls"]))
+                if frame.get("done"):
+                    stop_reason = frame.get("done_reason", "") or stop_reason
+                    final = frame
+        except HttpStreamError as exc:
+            yield StreamEvent(
+                done=True,
+                error=str(exc),
+                response=LLMResponse(
+                    model=self.model,
+                    usage=Usage(provider=self.name, model=self.model),
+                    error=str(exc),
+                ),
+            )
+            return
+
+        response = LLMResponse(
+            text="".join(parts),
+            model=model,
+            usage=self._usage(final, model),
+            tool_calls=calls,
+            stop_reason=stop_reason,
+        )
+        yield StreamEvent(done=True, response=response)

@@ -8,6 +8,14 @@ from __future__ import annotations
 
 from maestro.tools.base import FunctionTool, Tool
 from maestro.tools.builtin import builtin_tools
+from maestro.tools.schema import (
+    ToolCall,
+    parse_arguments,
+    to_anthropic,
+    to_ollama,
+    to_openai,
+    to_react_catalogue,
+)
 
 
 def build_tools(names: list[str] | None) -> list[Tool]:
@@ -26,4 +34,15 @@ def available_tools() -> list[str]:
     return sorted(builtin_tools())
 
 
-__all__ = ["FunctionTool", "Tool", "available_tools", "build_tools"]
+__all__ = [
+    "FunctionTool",
+    "Tool",
+    "ToolCall",
+    "available_tools",
+    "build_tools",
+    "parse_arguments",
+    "to_anthropic",
+    "to_ollama",
+    "to_openai",
+    "to_react_catalogue",
+]

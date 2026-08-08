@@ -8,6 +8,9 @@ Transient failures are retried *here* rather than in each provider, so every
 backend inherits the same behaviour: HTTP 429 (rate limited) and 529 (server
 overloaded) are retried with exponential backoff, honouring a ``retry-after``
 header whenever the server sends one.
+
+:func:`stream_lines` adds the streaming half of the transport — still stdlib
+only, since ``urllib`` response objects are line-iterable as bytes arrive.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
 #: Status codes worth another attempt.  429 means "slow down" and 529 is
@@ -140,3 +144,51 @@ def post_json(
         if result.status not in RETRY_STATUSES:
             return result
     return result
+
+
+class HttpStreamError(RuntimeError):
+    """A streamed request failed.  Raised by :func:`stream_lines` only."""
+
+
+def stream_lines(
+    url: str,
+    payload: dict,
+    headers: dict[str, str] | None = None,
+    timeout: float = 120.0,
+) -> Iterator[str]:
+    """POST *payload* as JSON and yield response lines as the server sends them.
+
+    Unlike :func:`post_json` this **raises** :class:`HttpStreamError` on failure
+    rather than returning a result object: a generator cannot hand back an error
+    value before it has yielded anything, and half a stream is not a result.
+    Providers catch it and turn it into a terminal
+    :class:`~maestro.providers.base.StreamEvent`, so the caller still never sees
+    an exception.
+
+    Nothing is retried here.  A retried stream would have to re-emit tokens the
+    consumer has already seen, so a failed stream is reported, not repeated.
+    """
+    data = json.dumps(payload).encode("utf-8")
+    hdrs = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    }
+    hdrs.update(headers or {})
+    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            for raw in resp:
+                yield raw.decode("utf-8", "replace").rstrip("\r\n")
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        with contextlib.suppress(Exception):
+            detail = exc.read().decode("utf-8", "replace")
+        raise HttpStreamError(f"HTTP {exc.code}: {detail[:500]}") from exc
+    except urllib.error.URLError as exc:
+        raise HttpStreamError(f"connection error: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise HttpStreamError(f"request timed out after {timeout}s") from exc
+    except HttpStreamError:
+        raise
+    except Exception as exc:
+        raise HttpStreamError(f"transport error: {exc}") from exc

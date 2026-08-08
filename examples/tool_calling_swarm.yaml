@@ -1,0 +1,60 @@
+# Native function calling, with the ReAct fallback underneath.
+#
+#   maestro run examples/tool_calling_swarm.yaml \
+#     "How many hours of GPU time is 3 weeks, and what is today's date?"
+#
+# Tools are declared once — by name, here — and MAESTRO adapts that single
+# declaration to whatever the agent's backend speaks:
+#
+#   anthropic        native tool_use / tool_result blocks
+#   openai, ollama   native `tools` functions
+#   anything else    the plain-text ACTION:/OBSERVATION: convention
+#
+# Nothing in this spec changes between those cases. `native_tools` below is only
+# there to *demonstrate* the fallback: it pins one agent to the text protocol on
+# a backend that could have done it natively, so a single run exercises both
+# tracks. Omit it and each agent simply uses the best protocol its backend has.
+#
+# Run `maestro run ... --json` and compare the two agents' `tool_protocol`.
+
+name: tool-calling-swarm
+description: Two agents using the same tools over different tool protocols.
+topology: parallel
+topology_params:
+  aggregator: reporter
+
+providers:
+  claude:
+    provider: anthropic
+    model: claude-opus-5
+  local:
+    provider: ollama
+    model: llama3.1
+
+agents:
+  - name: native_user
+    type: llm
+    provider: claude
+    role: analyst
+    tools: [calc, now]
+    system_prompt: >
+      Answer using the tools when arithmetic or the current date is involved.
+      State the tool result plainly.
+
+  - name: react_user
+    type: llm
+    provider: local
+    role: analyst
+    tools: [calc, now]
+    native_tools: false        # force the text protocol, even though Ollama has native tools
+    system_prompt: >
+      Answer using the tools when arithmetic or the current date is involved.
+      State the tool result plainly.
+
+  - name: reporter
+    type: llm
+    provider: claude
+    role: synthesizer
+    system_prompt: >
+      Reconcile the two analysts' answers into one. Note any disagreement rather
+      than hiding it.
