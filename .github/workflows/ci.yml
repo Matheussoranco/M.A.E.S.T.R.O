@@ -78,15 +78,21 @@ jobs:
           python-version: "3.12"
 
       # The core runtime being pure standard library is a design constraint,
-      # not an accident — so it is enforced here rather than trusted. This job
-      # installs the package with NO extras and asserts that nothing
-      # third-party came with it, then exercises the real entry points.
-      - name: Install with no extras
-        run: pip install .
+      # not an accident — so it is enforced here rather than trusted. The
+      # install goes into a *dedicated venv*, not the runner's environment:
+      # hosted runners preinstall their own tooling (pipx and its dependencies
+      # on Windows), which would otherwise be mistaken for ours.
+      - name: Install with no extras, in an isolated venv
+        shell: bash
+        run: |
+          python -m venv .zerodeps
+          .zerodeps/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}/python -m pip install --quiet --upgrade pip
+          .zerodeps/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}/python -m pip install --quiet .
 
       - name: Assert nothing third-party was installed
-        shell: python
+        shell: bash
         run: |
+          .zerodeps/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}/python - <<'PY'
           import json, subprocess, sys
           frozen = subprocess.run(
               [sys.executable, "-m", "pip", "list", "--format=json",
@@ -97,25 +103,29 @@ jobs:
           installed.discard("maestro-swarm")
           assert not installed, f"maestro-swarm pulled in dependencies: {sorted(installed)}"
           print("clean: maestro-swarm installed with zero third-party packages")
+          PY
 
       # Every command here must exit 0 with no network and no keys. The demo
       # runs a full supervisor->workers->synthesis swarm on the offline `echo`
       # backend, so this exercises streaming and the usage rollup for real,
       # not just the import.
       - name: Import and run the real entry points
+        shell: bash
         run: |
-          python -c "import maestro; print('maestro', maestro.__version__)"
-          maestro version
-          maestro topologies
-          maestro providers
-          maestro prices
-          maestro demo --usage --no-trace
-          maestro demo --stream --no-trace
-          maestro validate examples/local_ollama_swarm.json
+          BIN=.zerodeps/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}
+          $BIN/python -c "import maestro; print('maestro', maestro.__version__)"
+          $BIN/maestro version
+          $BIN/maestro topologies
+          $BIN/maestro providers
+          $BIN/maestro prices
+          $BIN/maestro demo --usage --no-trace
+          $BIN/maestro demo --stream --no-trace
+          $BIN/maestro validate examples/local_ollama_swarm.json
 
       - name: A YAML spec must fail with a clear message, not a traceback
-        shell: python
+        shell: bash
         run: |
+          .zerodeps/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}/python - <<'PY'
           import subprocess, sys
           # PyYAML is an optional extra. Without it, a .yaml spec must explain
           # itself and point at the fix — never crash with an ImportError.
@@ -127,3 +137,4 @@ jobs:
           assert "PyYAML" in combined, combined
           assert "Traceback" not in combined, combined
           print("graceful:", out.stdout.strip())
+          PY

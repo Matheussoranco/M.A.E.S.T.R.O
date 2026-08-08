@@ -328,34 +328,84 @@ def test_agent_forwards_fragments_and_still_returns_a_whole_result():
     assert streamed.final == plain.final
 
 
+ALL_TOPOLOGIES = [
+    ("sequential", {}),
+    ("parallel", {"aggregator": "reducer"}),
+    ("parallel", {}),
+    ("supervisor", {"supervisor": "lead"}),
+    ("debate", {"rounds": 2, "judge": "reducer"}),
+    ("router", {}),
+]
+
+# Note: the fan-out topologies use a thread pool, and each agent's echo output
+# embeds a digest of the blackboard, so the *content* of such a run legitimately
+# varies with scheduling. That is a property of the offline backend, not of
+# streaming — which is why those topologies are checked with the per-agent
+# invariant below rather than a whole-run text comparison.
+
+
+def _swarm(topology, params):
+    agents = [_agent("lead", "supervisor"), _agent("worker"), _agent("reducer")]
+    return Swarm("s", agents, build_topology(topology, **params))
+
+
+@pytest.mark.parametrize("topology,params", ALL_TOPOLOGIES)
+def test_every_agents_output_is_exactly_what_it_streamed(topology, params):
+    """The aggregated text and the streamed text are the same text.
+
+    This is the invariant that matters for aggregation: whatever a topology
+    feeds downstream or concatenates into the final answer must be precisely
+    what the consumer watched being produced — no fragment dropped, none
+    invented, and none misattributed to another agent.
+    """
+    fragments: dict[str, list[str]] = {}
+    result = _swarm(topology, params).run(
+        "solve X", on_token=lambda a, t: fragments.setdefault(a, []).append(t)
+    )
+
+    assert fragments, "streaming produced no fragments"
+    assert result.ok()
+    for agent_result in result.per_agent:
+        if not agent_result.ok():
+            continue
+        streamed = "".join(fragments[agent_result.name])
+        # An agent may take several turns (debate rounds, a supervisor's plan
+        # then its synthesis), so its stream is the concatenation of them all;
+        # the result kept by the topology is one of those turns.
+        assert agent_result.output in streamed, (
+            f"{agent_result.name}: aggregated output is not what it streamed"
+        )
+    # The final answer is assembled from those same streamed outputs.
+    for agent_result in result.per_agent:
+        if agent_result.ok() and agent_result.output in result.final:
+            break
+    else:  # pragma: no cover - only on a genuine aggregation bug
+        raise AssertionError("final answer contains no agent's streamed output")
+
+
 @pytest.mark.parametrize(
     "topology,params",
-    [
-        ("sequential", {}),
-        ("parallel", {"aggregator": "reducer"}),
-        ("parallel", {}),
-        ("supervisor", {"supervisor": "lead"}),
-        ("debate", {"rounds": 2, "judge": "reducer"}),
-        ("router", {}),
-    ],
+    [("sequential", {}), ("debate", {"rounds": 2, "judge": "reducer"}), ("router", {})],
 )
-def test_streaming_does_not_change_what_a_topology_aggregates(topology, params):
-    """The final answer must not depend on whether anyone was watching."""
-
-    def build():
-        return [_agent("lead", "supervisor"), _agent("worker"), _agent("reducer")]
-
-    plain = Swarm("s", build(), build_topology(topology, **params)).run("solve X")
-
-    seen: list[str] = []
-    streamed = Swarm("s", build(), build_topology(topology, **params)).run(
-        "solve X", on_token=lambda a, t: seen.append(t)
-    )
+def test_streaming_does_not_change_what_an_ordered_topology_aggregates(topology, params):
+    """For topologies with deterministic ordering, the run is byte-identical."""
+    plain = _swarm(topology, params).run("solve X")
+    streamed = _swarm(topology, params).run("solve X", on_token=lambda a, t: None)
 
     assert streamed.final == plain.final
     assert streamed.ok() == plain.ok()
     assert [r.name for r in streamed.per_agent] == [r.name for r in plain.per_agent]
-    assert seen, "streaming produced no fragments"
+
+
+@pytest.mark.parametrize("topology,params", ALL_TOPOLOGIES)
+def test_streaming_never_changes_which_agents_ran(topology, params):
+    """Control flow is identical whether or not a sink is attached."""
+    plain = _swarm(topology, params).run("solve X")
+    streamed = _swarm(topology, params).run("solve X", on_token=lambda a, t: None)
+
+    assert sorted(r.name for r in streamed.per_agent) == sorted(r.name for r in plain.per_agent)
+    assert streamed.ok() == plain.ok()
+    assert streamed.usage.calls == plain.usage.calls
 
 
 def test_parallel_streaming_labels_every_fragment_with_its_agent():
