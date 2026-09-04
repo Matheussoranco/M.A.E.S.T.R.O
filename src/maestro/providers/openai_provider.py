@@ -98,12 +98,14 @@ class OpenAICompatClient(LLMClient):
         timeout: float = 120.0,
         name: str = "openai",
         require_key: bool = True,
+        options: dict | None = None,
     ) -> None:
         self.model = model or DEFAULT_MODEL
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.name = name
+        self.options = dict(options or {})
         # Local servers (vLLM, LM Studio, llama.cpp) accept any/empty key.
         self._require_key = require_key
 
@@ -113,7 +115,11 @@ class OpenAICompatClient(LLMClient):
 
     # -- request construction -------------------------------------------------
     def _payload(self, messages, system, max_tokens, temperature, tools) -> dict:
-        payload: dict = {"model": self.model, "messages": to_messages(messages, system)}
+        payload: dict = {
+            **self.options,
+            "model": self.model,
+            "messages": to_messages(messages, system),
+        }
         if max_tokens:
             payload["max_tokens"] = max_tokens
         if temperature is not None:
@@ -151,6 +157,13 @@ class OpenAICompatClient(LLMClient):
                 error=res.error,
             )
         data = res.json()
+        if data.get("_parse_error"):
+            return LLMResponse(
+                model=self.model,
+                usage=Usage(provider=self.name, model=self.model),
+                raw=data,
+                error=f"invalid JSON response: {data['_parse_error']}",
+            )
         choices = data.get("choices") or []
         text = ""
         calls: list[ToolCall] = []
@@ -197,6 +210,7 @@ class OpenAICompatClient(LLMClient):
         stop_reason = ""
         input_tokens: int | None = None
         output_tokens: int | None = None
+        saw_frame = False
         try:
             for line in stream_lines(
                 f"{self.base_url}/chat/completions",
@@ -213,6 +227,9 @@ class OpenAICompatClient(LLMClient):
                     frame = json.loads(body)
                 except json.JSONDecodeError:
                     continue
+                if not isinstance(frame, dict):
+                    continue
+                saw_frame = True
                 model = frame.get("model", model)
                 usage = frame.get("usage") or {}
                 if usage:
@@ -270,4 +287,6 @@ class OpenAICompatClient(LLMClient):
             tool_calls=calls,
             stop_reason=stop_reason,
         )
+        if not saw_frame:
+            response.error = "stream contained no valid JSON response frames"
         yield StreamEvent(done=True, response=response)

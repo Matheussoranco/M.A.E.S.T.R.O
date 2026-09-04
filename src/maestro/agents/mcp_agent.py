@@ -20,6 +20,7 @@ import shlex
 import shutil
 import subprocess
 import threading
+import time
 
 from maestro.agents.base import Agent, AgentResult
 from maestro.swarm.context import RunContext
@@ -98,6 +99,7 @@ class MCPAgent(Agent):
         )
         reader = _LineReader(proc.stdout)
         reader.start()
+        deadline = time.monotonic() + self.timeout
         try:
             self._send(
                 proc,
@@ -106,20 +108,29 @@ class MCPAgent(Agent):
                 {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {"name": "maestro", "version": "0.1.0"},
+                    "clientInfo": {"name": "maestro", "version": "0.2.0"},
                 },
             )
-            self._await(reader, 1)
+            self._await(reader, 1, deadline)
             self._notify(proc, "notifications/initialized")
             args = {self.arg_key: task, **self.extra_args}
             self._send(proc, 2, "tools/call", {"name": self.tool, "arguments": args})
-            result = self._await(reader, 2)
+            result = self._await(reader, 2, deadline)
         finally:
             with _suppress():
                 proc.stdin.close()
             with _suppress():
                 proc.terminate()
+            with _suppress():
+                proc.wait(timeout=1.0)
+            if proc.poll() is None:
+                with _suppress():
+                    proc.kill()
+                with _suppress():
+                    proc.wait(timeout=1.0)
             reader.stop()
+            with _suppress():
+                reader.join(timeout=1.0)
 
         content = (result or {}).get("content") or []
         texts = [
@@ -142,12 +153,12 @@ class MCPAgent(Agent):
         )
         proc.stdin.flush()
 
-    def _await(self, reader: _LineReader, mid: int) -> dict | None:
-        import time
-
-        deadline = time.time() + self.timeout
-        while time.time() < deadline:
-            line = reader.get(timeout=max(0.05, deadline - time.time()))
+    def _await(self, reader: _LineReader, mid: int, deadline: float) -> dict | None:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            line = reader.get(timeout=remaining)
             if line is None:
                 if reader.finished():
                     raise _MCPError("MCP server closed the connection")
@@ -185,13 +196,13 @@ class _LineReader(threading.Thread):
         super().__init__(daemon=True)
         self._stream = stream
         self._q: queue.Queue[str | None] = queue.Queue()
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
         self._done = threading.Event()
 
     def run(self) -> None:
         try:
             for line in self._stream:
-                if self._stop.is_set():
+                if self._stop_event.is_set():
                     break
                 self._q.put(line)
         except Exception:
@@ -210,4 +221,4 @@ class _LineReader(threading.Thread):
         return self._done.is_set()
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_event.set()

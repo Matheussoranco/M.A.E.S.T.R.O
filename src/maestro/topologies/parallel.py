@@ -31,16 +31,26 @@ class ParallelTopology(Topology):
 
         max_workers = max(1, min(len(workers), self.params.get("max_workers", 8)))
         results: list[AgentResult] = []
-        # Each worker gets an isolated child context view (shared blackboard) so
-        # they don't prompt-contaminate each other, but still record results.
+        # Every worker gets the same initial snapshot.  Their writes are merged
+        # only after all workers finish, so fan-out remains independent and
+        # reproducible while the aggregator still sees the complete transcript.
+        initial = context.blackboard.snapshot()
+        message_offset = len(initial.messages())
+        worker_contexts = []
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(w.run, task, context.child()): w for w in workers}
+            futures = {}
+            for w in workers:
+                worker_context = context.child(blackboard=initial.snapshot())
+                worker_contexts.append(worker_context)
+                futures[pool.submit(w.run, task, worker_context)] = worker_context
             for fut in futures:
                 results.append(fut.result())
 
         # Preserve declaration order for deterministic output.
         order = {w.name: i for i, w in enumerate(workers)}
         results.sort(key=lambda r: order.get(r.name, 0))
+        for worker_context in worker_contexts:
+            context.blackboard.merge_from(worker_context.blackboard, message_offset)
 
         if aggregator is not None:
             agg_task = self.params.get(

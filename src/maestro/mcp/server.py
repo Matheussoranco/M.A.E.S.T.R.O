@@ -12,7 +12,9 @@ Register with an ``.mcp.json`` entry::
 from __future__ import annotations
 
 import json
+import os
 import sys
+from pathlib import Path
 
 from maestro import __version__
 
@@ -75,13 +77,14 @@ def _call_tool(name: str, args: dict) -> dict:
         if name == "maestro_run_spec":
             from maestro.orchestrator import Orchestrator
 
-            orch = Orchestrator.from_file(args["spec_path"])
+            spec_path = _safe_spec_path(args["spec_path"])
+            orch = Orchestrator.from_file(spec_path)
             res = orch.run(args["task"], trace=False)
             return _text(res.final or f"(no output — {res.error})")
         if name == "maestro_validate":
             from maestro.orchestrator.spec import SwarmSpec
 
-            spec = SwarmSpec.from_file(args["spec_path"])
+            spec = SwarmSpec.from_file(_safe_spec_path(args["spec_path"]))
             problems = spec.validate()
             return _text("valid" if not problems else "invalid:\n- " + "\n- ".join(problems))
         if name == "maestro_list_topologies":
@@ -91,6 +94,24 @@ def _call_tool(name: str, args: dict) -> dict:
     except Exception as exc:
         return _error(f"{type(exc).__name__}: {exc}")
     return _error(f"unknown tool {name!r}")
+
+
+def _safe_spec_path(raw_path: str) -> str:
+    """Resolve a spec path within the MCP server's configured trust roots."""
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        raise ValueError("spec_path must be a non-empty string")
+    path = Path(raw_path).expanduser().resolve()
+    roots_raw = os.environ.get("MAESTRO_MCP_SPEC_ROOTS", "")
+    roots = [Path(root).expanduser().resolve() for root in roots_raw.split(os.pathsep) if root]
+    if not roots:
+        roots = [Path.cwd().resolve()]
+    if not path.is_file():
+        raise ValueError(f"spec file not found: {path}")
+    if not any(path == root or root in path.parents for root in roots):
+        raise PermissionError(
+            f"spec path is outside the MCP allowlist; configure MAESTRO_MCP_SPEC_ROOTS: {path}"
+        )
+    return str(path)
 
 
 def _handle(msg: dict) -> dict | None:

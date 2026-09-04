@@ -25,6 +25,7 @@ Example (YAML)::
 from __future__ import annotations
 
 import json
+import math
 import os
 from dataclasses import dataclass, field
 
@@ -54,8 +55,17 @@ class SwarmSpec:
     def from_dict(cls, data: dict) -> SwarmSpec:
         if not isinstance(data, dict):
             raise ValueError("swarm spec must be a mapping/object")
+        raw_providers = data.get("providers") or {}
+        if not isinstance(raw_providers, dict):
+            raise ValueError("'providers' must be a mapping")
+        raw_params = data.get("topology_params") or {}
+        if not isinstance(raw_params, dict):
+            raise ValueError("'topology_params' must be a mapping")
+        raw_agents = data.get("agents") or []
+        if not isinstance(raw_agents, list):
+            raise ValueError("'agents' must be a list")
         providers: dict[str, ProviderSpec] = {}
-        for key, pv in (data.get("providers") or {}).items():
+        for key, pv in raw_providers.items():
             if isinstance(pv, str):
                 providers[key] = ProviderSpec(provider=pv)
             elif isinstance(pv, dict):
@@ -66,10 +76,14 @@ class SwarmSpec:
         return cls(
             name=data.get("name", "swarm"),
             description=data.get("description", ""),
-            topology=data.get("topology", "sequential"),
-            topology_params=dict(data.get("topology_params") or {}),
+            topology=(
+                data.get("topology", "sequential").lower()
+                if isinstance(data.get("topology", "sequential"), str)
+                else data.get("topology", "sequential")
+            ),
+            topology_params=dict(raw_params),
             providers=providers,
-            agents=list(data.get("agents") or []),
+            agents=list(raw_agents),
             prices=_parse_prices(data.get("prices")),
         )
 
@@ -96,7 +110,7 @@ class SwarmSpec:
         problems: list[str] = []
         if not self.name:
             problems.append("spec is missing a 'name'")
-        if self.topology not in TOPOLOGIES:
+        if not isinstance(self.topology, str) or self.topology not in TOPOLOGIES:
             problems.append(
                 f"unknown topology {self.topology!r} (choose: {', '.join(sorted(TOPOLOGIES))})"
             )
@@ -109,15 +123,16 @@ class SwarmSpec:
                 problems.append(f"agent #{i} is not a mapping")
                 continue
             name = ag.get("name")
-            if not name:
+            if not isinstance(name, str) or not name.strip():
                 problems.append(f"agent #{i} is missing 'name'")
             elif name in seen:
                 problems.append(f"duplicate agent name {name!r}")
             else:
                 seen.add(name)
-            atype = (ag.get("type") or "llm").lower()
+            raw_type = ag.get("type") or "llm"
+            atype = raw_type.lower() if isinstance(raw_type, str) else ""
             if atype not in AGENT_TYPES:
-                problems.append(f"agent {name!r} has unknown type {atype!r}")
+                problems.append(f"agent {name!r} has unknown type {raw_type!r}")
             if atype == "cli" and not ag.get("command"):
                 problems.append(f"cli agent {name!r} needs a 'command'")
             if atype == "mcp" and not (ag.get("server_cmd") and ag.get("tool")):
@@ -125,10 +140,44 @@ class SwarmSpec:
             ref = ag.get("provider")
             if isinstance(ref, str) and ref and ref not in self.providers and ref not in PROVIDERS:
                 problems.append(f"agent {name!r} references unknown provider {ref!r}")
+            if atype == "llm":
+                _positive_int(problems, ag, "max_tokens", f"agent {name!r}")
+                _positive_int(problems, ag, "max_tool_iters", f"agent {name!r}")
+                _finite_number(problems, ag, "temperature", f"agent {name!r}")
+                if "tools" in ag and not isinstance(ag["tools"], list):
+                    problems.append(f"agent {name!r} field 'tools' must be a list")
+            if atype in {"cli", "mcp", "isaac", "olivia"}:
+                _positive_number(problems, ag, "timeout", f"agent {name!r}")
+                if atype in {"cli", "mcp"}:
+                    command_key = "command" if atype == "cli" else "server_cmd"
+                    if command_key in ag and not isinstance(ag[command_key], (str, list)):
+                        problems.append(
+                            f"agent {name!r} field '{command_key}' must be a string or list"
+                        )
+
+        if self.topology in {"parallel", "supervisor"}:
+            _positive_int(problems, self.topology_params, "max_workers", "topology_params")
+        if self.topology == "debate":
+            _positive_int(problems, self.topology_params, "rounds", "topology_params")
+
+        for key, provider in self.providers.items():
+            if not isinstance(provider.provider, str) or not provider.provider:
+                problems.append(f"provider {key!r} needs a non-empty 'provider'")
+            if provider.timeout is not None and (
+                not isinstance(provider.timeout, (int, float))
+                or isinstance(provider.timeout, bool)
+                or not math.isfinite(provider.timeout)
+                or provider.timeout <= 0
+            ):
+                problems.append(f"provider {key!r} field 'timeout' must be a positive number")
+            if not isinstance(provider.options, dict):
+                problems.append(f"provider {key!r} field 'options' must be a mapping")
 
         for key in _AGENT_REF_PARAMS:
             ref = self.topology_params.get(key)
-            if ref and ref not in seen:
+            if ref and not isinstance(ref, str):
+                problems.append(f"topology_params.{key} must be an agent name string")
+            elif ref and ref not in seen:
                 problems.append(f"topology_params.{key} = {ref!r} does not match any agent name")
         return problems
 
@@ -154,10 +203,42 @@ def _parse_prices(raw: object) -> dict[str, tuple[float, float]]:
                 f"price for {model!r} must be {{input: x, output: y}} or [x, y], got {entry!r}"
             )
         try:
-            out[str(model)] = (float(values[0]), float(values[1]))
+            input_price, output_price = float(values[0]), float(values[1])
         except (TypeError, ValueError) as exc:
             raise ValueError(f"price for {model!r} must be numeric") from exc
+        if not all(math.isfinite(value) and value >= 0 for value in (input_price, output_price)):
+            raise ValueError(f"price for {model!r} must be finite and non-negative")
+        out[str(model)] = (input_price, output_price)
     return out
+
+
+def _positive_int(problems: list[str], mapping: dict, key: str, where: str) -> None:
+    if key not in mapping:
+        return
+    value = mapping[key]
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        problems.append(f"{where} field '{key}' must be a positive integer")
+
+
+def _positive_number(problems: list[str], mapping: dict, key: str, where: str) -> None:
+    if key not in mapping:
+        return
+    value = mapping[key]
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+    ):
+        problems.append(f"{where} field '{key}' must be a positive number")
+
+
+def _finite_number(problems: list[str], mapping: dict, key: str, where: str) -> None:
+    if key not in mapping or mapping[key] is None:
+        return
+    value = mapping[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        problems.append(f"{where} field '{key}' must be a finite number")
 
 
 def _load_yaml(text: str, path: str) -> dict:

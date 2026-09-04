@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from maestro.agents.llm_agent import LLMAgent
 from maestro.providers import anthropic_provider, ollama_provider, openai_provider
 from maestro.providers._http import HttpResult
@@ -261,6 +263,20 @@ def test_no_tools_means_no_tools_key_in_the_payload(monkeypatch):
     assert "tools" not in seen["payload"]
 
 
+@pytest.mark.parametrize(
+    "module, client",
+    [
+        (anthropic_provider, anthropic_provider.AnthropicClient(api_key="k")),
+        (openai_provider, openai_provider.OpenAICompatClient(api_key="k")),
+        (ollama_provider, ollama_provider.OllamaClient()),
+    ],
+)
+def test_providers_report_malformed_success_bodies_as_errors(monkeypatch, module, client):
+    _capture(monkeypatch, module, "not-json")
+    response = client.complete([])
+    assert response.error and "invalid JSON" in response.error
+
+
 # --------------------------------------------------------------------------- #
 # The agent's two tracks
 # --------------------------------------------------------------------------- #
@@ -394,6 +410,31 @@ def test_unknown_tool_is_reported_back_to_the_model_not_raised():
 
     assert res.ok()
     assert "unknown tool" in client.histories[1][-1]["content"]
+
+
+def test_custom_tool_failures_are_returned_to_the_model_not_raised():
+    class BrokenTool(Tool):
+        name = "broken"
+
+        def run(self, arg):
+            raise RuntimeError("tool exploded")
+
+        def call(self, arguments):
+            raise RuntimeError("tool exploded")
+
+    class BrokenNativeClient(NativeToolClient):
+        def complete(self, messages, system="", max_tokens=None, temperature=None, tools=None):
+            self.turns += 1
+            if self.turns == 1:
+                return LLMResponse(tool_calls=[ToolCall(name="broken")])
+            return LLMResponse(text="recovered")
+
+    native = LLMAgent("native", BrokenNativeClient(), tools=[BrokenTool()]).run("x")
+    react = LLMAgent(
+        "react", ScriptedClient(["ACTION: broken x", "recovered"]), tools=[BrokenTool()]
+    ).run("x")
+
+    assert native.ok() and react.ok()
 
 
 def test_agent_without_tools_makes_exactly_one_call():

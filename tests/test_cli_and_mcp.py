@@ -40,6 +40,14 @@ def test_cli_validate_and_run_json_spec(tmp_path):
     assert main(["run", str(path), "hello", "--json"]) == 0
 
 
+def test_cli_stream_json_keeps_stdout_machine_readable(capsys):
+    assert main(["demo", "--stream", "--json", "--no-trace"]) == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["final"]
+    assert "=== STREAM ===" in captured.err
+
+
 def test_cli_validate_bad_spec_returns_1(tmp_path):
     path = tmp_path / "bad.json"
     path.write_text(json.dumps({"name": "s", "topology": "nope", "agents": []}), encoding="utf-8")

@@ -359,6 +359,28 @@ def test_spec_prices_flow_into_the_rollup():
     assert res.usage.cost_complete
 
 
+def test_spec_prices_do_not_leak_into_other_swarms():
+    first = {
+        "name": "first",
+        "topology": "sequential",
+        "providers": {"stub": {"provider": "echo", "model": "isolated-price-model"}},
+        "agents": [{"name": "a", "provider": "stub"}],
+        "prices": {"isolated-price-model": {"input": 1.0, "output": 2.0}},
+    }
+    second = {
+        "name": "second",
+        "topology": "sequential",
+        "providers": {"stub": {"provider": "echo", "model": "isolated-price-model"}},
+        "agents": [{"name": "a", "provider": "stub"}],
+    }
+
+    priced = Orchestrator.from_dict(first).run("hello", trace=False)
+    unpriced = Orchestrator.from_dict(second).run("hello", trace=False)
+
+    assert priced.usage.cost_complete
+    assert unpriced.usage.cost is None
+
+
 def test_spec_prices_accept_the_sequence_form():
     from maestro.orchestrator.spec import SwarmSpec
 

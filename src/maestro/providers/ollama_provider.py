@@ -84,10 +84,12 @@ class OllamaClient(LLMClient):
         model: str = "",
         base_url: str = "http://localhost:11434",
         timeout: float = 120.0,
+        options: dict | None = None,
     ) -> None:
         self.model = model or DEFAULT_MODEL
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.options = dict(options or {})
 
     @property
     def available(self) -> bool:
@@ -100,6 +102,7 @@ class OllamaClient(LLMClient):
         if temperature is not None:
             options["temperature"] = temperature
         payload: dict = {
+            **self.options,
             "model": self.model,
             "messages": to_messages(messages, system),
             "stream": stream,
@@ -134,6 +137,13 @@ class OllamaClient(LLMClient):
                 error=res.error,
             )
         data = res.json()
+        if data.get("_parse_error"):
+            return LLMResponse(
+                model=self.model,
+                usage=Usage(provider=self.name, model=self.model),
+                raw=data,
+                error=f"invalid JSON response: {data['_parse_error']}",
+            )
         message = data.get("message") or {}
         model = data.get("model", self.model)
         return LLMResponse(
@@ -155,6 +165,7 @@ class OllamaClient(LLMClient):
         model = self.model
         stop_reason = ""
         final: dict = {}
+        saw_frame = False
         try:
             for line in stream_lines(f"{self.base_url}/api/chat", payload, timeout=self.timeout):
                 # Ollama streams NDJSON: one complete JSON object per line.
@@ -164,6 +175,9 @@ class OllamaClient(LLMClient):
                     frame = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                if not isinstance(frame, dict):
+                    continue
+                saw_frame = True
                 model = frame.get("model", model)
                 message = frame.get("message") or {}
                 chunk = message.get("content") or ""
@@ -194,4 +208,6 @@ class OllamaClient(LLMClient):
             tool_calls=calls,
             stop_reason=stop_reason,
         )
+        if not saw_frame:
+            response.error = "stream contained no valid JSON response frames"
         yield StreamEvent(done=True, response=response)

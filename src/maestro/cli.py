@@ -46,7 +46,14 @@ def _emit_result(result, as_json: bool, usage: bool = False) -> None:
             "final": result.final,
             "error": result.error,
             "agents": [
-                {"name": r.name, "role": r.role, "ok": r.ok(), "output": r.output, "error": r.error}
+                {
+                    "name": r.name,
+                    "role": r.role,
+                    "ok": r.ok(),
+                    "output": r.output,
+                    "error": r.error,
+                    "meta": r.meta,
+                }
                 for r in result.per_agent
             ],
             # Always included: consumers of the JSON should not have to ask for
@@ -68,16 +75,17 @@ def _emit_result(result, as_json: bool, usage: bool = False) -> None:
         _print(result.tracer.render())
 
 
-def _token_printer():
+def _token_printer(output=None):
     """A sink that prints streamed fragments, tagging each change of speaker."""
+    output = output or sys.stdout
     state = {"who": ""}
 
     def on_token(agent: str, text: str) -> None:
         if agent != state["who"]:
             state["who"] = agent
-            sys.stdout.write(f"\n[{agent}] ")
-        sys.stdout.write(text)
-        sys.stdout.flush()
+            output.write(f"\n[{agent}] ")
+        output.write(text)
+        output.flush()
 
     return on_token
 
@@ -87,9 +95,15 @@ def _run_swarm(orch, task: str, args):
     stream = getattr(args, "stream", False)
     if not stream:
         return orch.run(task, trace=not getattr(args, "no_trace", False))
-    _print("=== STREAM ===")
-    result = orch.run(task, trace=not getattr(args, "no_trace", False), on_token=_token_printer())
-    _print("")
+    # stdout must remain valid JSON when --json and --stream are combined.
+    output = sys.stderr if getattr(args, "json", False) else sys.stdout
+    print("=== STREAM ===", file=output)
+    result = orch.run(
+        task,
+        trace=not getattr(args, "no_trace", False),
+        on_token=_token_printer(output),
+    )
+    print("", file=output)
     return result
 
 

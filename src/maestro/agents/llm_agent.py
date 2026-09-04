@@ -121,22 +121,32 @@ class LLMAgent(Agent):
         if tools:
             kwargs["tools"] = tools
 
-        if context is not None and context.stream:
-            response: LLMResponse | None = None
-            parts: list[str] = []
-            for event in self.client.complete_stream(messages, **kwargs):
-                if event.text:
-                    parts.append(event.text)
-                    context.emit_token(self.name, event.text)
-                if event.done:
-                    response = event.response
-            if response is None:  # provider ended without a terminal event
-                text = "".join(parts)
-                response = LLMResponse(
-                    text=text, error="" if text else "stream ended without a result"
-                )
-        else:
-            response = self.client.complete(messages, **kwargs)
+        try:
+            if context is not None and context.stream:
+                response = None
+                parts: list[str] = []
+                for event in self.client.complete_stream(messages, **kwargs):
+                    if event.text:
+                        parts.append(event.text)
+                        context.emit_token(self.name, event.text)
+                    if event.done:
+                        response = event.response
+                if response is None:  # provider ended without a terminal event
+                    text = "".join(parts)
+                    response = LLMResponse(
+                        text=text, error="" if text else "stream ended without a result"
+                    )
+            else:
+                response = self.client.complete(messages, **kwargs)
+        except Exception as exc:
+            response = LLMResponse(
+                model=getattr(self.client, "model", ""),
+                usage=Usage(
+                    provider=getattr(self.client, "name", "unknown"),
+                    model=getattr(self.client, "model", ""),
+                ),
+                error=f"backend error: {exc}",
+            )
 
         usage.append(response.usage)
         if context is not None:
@@ -158,6 +168,9 @@ class LLMAgent(Agent):
 
     def _meta(self, response: LLMResponse, protocol: str, **extra) -> dict:
         meta = {"model": response.model, "tool_protocol": protocol}
+        if isinstance(response.raw, dict) and response.raw.get("fallback"):
+            meta["fallback"] = True
+            meta["primary_error"] = response.raw.get("primary_error", "")
         meta.update(extra)
         return meta
 
@@ -194,11 +207,14 @@ class LLMAgent(Agent):
             )
             for call in response.tool_calls:
                 tool = self.tools.get(call.name)
-                observation = (
-                    tool.call(call.arguments)
-                    if tool is not None
-                    else f"error: unknown tool {call.name!r}"
-                )
+                try:
+                    observation = (
+                        tool.call(call.arguments)
+                        if tool is not None
+                        else f"error: unknown tool {call.name!r}"
+                    )
+                except Exception as exc:
+                    observation = f"error: tool {call.name!r} failed: {exc}"
                 if context is not None:
                     context.tracer.emit("tool_call", name=call.name, detail=call.summary())
                 messages.append(
@@ -252,7 +268,10 @@ class LLMAgent(Agent):
             # Execute the requested tool and feed the observation back.
             tool_name, arg = match.group(1), match.group(2).strip()
             tool = self.tools.get(tool_name)
-            observation = tool.run(arg) if tool else f"error: unknown tool {tool_name!r}"
+            try:
+                observation = tool.run(arg) if tool else f"error: unknown tool {tool_name!r}"
+            except Exception as exc:
+                observation = f"error: tool {tool_name!r} failed: {exc}"
             if context is not None:
                 context.tracer.emit("tool_call", name=tool_name, detail=arg[:80])
             messages.append({"role": "assistant", "content": text})

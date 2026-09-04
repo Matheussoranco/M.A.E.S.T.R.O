@@ -28,6 +28,9 @@ class SwarmResult:
     #: Every backend call made during the run, as ``(agent_name, usage)``,
     #: attached by :meth:`Swarm.run` from the run context's ledger.
     usage_log: list[tuple[str, Usage]] = field(default_factory=list)
+    #: Prices declared by the spec that produced this result.  Kept local to
+    #: the result so constructing one swarm cannot mutate another swarm's bill.
+    prices: dict[str, tuple[float, float]] = field(default_factory=dict)
 
     def ok(self) -> bool:
         return not self.error and bool(self.final.strip())
@@ -50,7 +53,7 @@ class SwarmResult:
         else:
             for result in self.per_agent:
                 by_agent.setdefault(result.name, []).extend(result.usage)
-        return UsageTotals.from_agent_usage(by_agent, prices)
+        return UsageTotals.from_agent_usage(by_agent, self.prices if prices is None else prices)
 
     @property
     def usage(self) -> UsageTotals:

@@ -250,3 +250,84 @@ class EchoClient(LLMClient):
         for i, word in enumerate(words):
             yield StreamEvent(text=word if i == len(words) - 1 else word + " ")
         yield StreamEvent(done=True, response=response)
+
+
+class FallbackClient(LLMClient):
+    """Use a deterministic client when a configured backend cannot answer.
+
+    The primary client is attempted first.  Streaming falls back only when no
+    text has reached the consumer, because replacing a partial stream would
+    duplicate visible output.
+    """
+
+    def __init__(self, primary: LLMClient, fallback: LLMClient) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self.name = primary.name
+        self.model = primary.model
+        self.supports_streaming = primary.supports_streaming
+        self.supports_tools = primary.supports_tools
+
+    @property
+    def available(self) -> bool:
+        return self.primary.available or self.fallback.available
+
+    def complete(
+        self, messages, system="", max_tokens=None, temperature=None, tools=None
+    ) -> LLMResponse:
+        try:
+            if tools:
+                response = self.primary.complete(messages, system, max_tokens, temperature, tools)
+            else:
+                response = self.primary.complete(messages, system, max_tokens, temperature)
+        except Exception as exc:
+            response = LLMResponse(
+                model=self.primary.model,
+                usage=Usage(provider=self.primary.name, model=self.primary.model),
+                error=f"backend error: {exc}",
+            )
+        if not response.error:
+            return response
+        fallback = self.fallback.complete(messages, system, max_tokens, temperature)
+        fallback.raw = {
+            "fallback": True,
+            "primary_error": response.error,
+            "primary_raw": response.raw,
+        }
+        return fallback
+
+    def complete_stream(
+        self, messages, system="", max_tokens=None, temperature=None, tools=None
+    ) -> Iterator[StreamEvent]:
+        parts: list[str] = []
+        final: LLMResponse | None = None
+        try:
+            if tools:
+                events = self.primary.complete_stream(
+                    messages, system, max_tokens, temperature, tools
+                )
+            else:
+                events = self.primary.complete_stream(messages, system, max_tokens, temperature)
+            for event in events:
+                if event.text:
+                    parts.append(event.text)
+                if event.done:
+                    final = event.response
+                yield event
+        except Exception as exc:
+            final = LLMResponse(
+                model=self.primary.model,
+                usage=Usage(provider=self.primary.name, model=self.primary.model),
+                error=f"backend error: {exc}",
+            )
+        if final is None:
+            final = LLMResponse(
+                model=self.primary.model,
+                usage=Usage(provider=self.primary.name, model=self.primary.model),
+                text="".join(parts),
+                error="stream ended without a result" if not parts else "",
+            )
+        if final.error and not parts:
+            yield from self.fallback.complete_stream(
+                messages, system, max_tokens, temperature, tools=None
+            )

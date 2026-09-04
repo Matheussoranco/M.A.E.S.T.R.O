@@ -13,8 +13,10 @@ from maestro.providers import (
     OpenAICompatClient,
     ProviderSpec,
     get_client,
+    ollama_provider,
     resolve_client,
 )
+from maestro.providers._http import HttpResult
 
 
 def test_echo_is_available_and_deterministic():
@@ -39,6 +41,25 @@ def test_factory_builds_each_provider_type():
     assert isinstance(get_client(ProviderSpec(provider="openai")), OpenAICompatClient)
     assert isinstance(get_client(ProviderSpec(provider="ollama")), OllamaClient)
     assert isinstance(get_client(ProviderSpec(provider="llamacpp")), OpenAICompatClient)
+
+
+def test_provider_options_reach_the_request_payload(monkeypatch):
+    seen = {}
+
+    def fake_post(url, payload, headers=None, timeout=120.0, **kwargs):
+        seen.update(payload)
+        return HttpResult(status=200, body='{"choices": [{"message": {"content": "ok"}}]}')
+
+    monkeypatch.setattr("maestro.providers.openai_provider.post_json", fake_post)
+    get_client(
+        ProviderSpec(
+            provider="openai_compat",
+            options={"seed": 7, "response_format": {"type": "json_object"}},
+        )
+    ).complete([])
+
+    assert seen["seed"] == 7
+    assert seen["response_format"] == {"type": "json_object"}
 
 
 def test_unknown_provider_raises():
@@ -68,6 +89,23 @@ def test_resolve_no_fallback_returns_unavailable_client():
     client = resolve_client(ProviderSpec(provider="anthropic"), s)
     assert isinstance(client, AnthropicClient)
     assert not client.available
+
+
+def test_resolve_falls_back_after_a_configured_backend_fails(monkeypatch):
+    monkeypatch.setattr(
+        ollama_provider,
+        "post_json",
+        lambda *args, **kwargs: HttpResult(error="connection error: offline"),
+    )
+    client = resolve_client(
+        ProviderSpec(provider="ollama", base_url="http://configured", timeout=0.01),
+        Settings(allow_stub_fallback=True),
+    )
+
+    response = client.complete([])
+
+    assert response.ok()
+    assert response.raw["fallback"] is True
 
 
 def test_available_check_makes_no_network_call():

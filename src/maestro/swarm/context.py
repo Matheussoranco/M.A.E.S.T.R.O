@@ -71,11 +71,11 @@ class RunContext:
         lines.extend(f"- {m.short(width)}" for m in msgs)
         return "\n".join(lines)
 
-    def child(self) -> RunContext:
-        """A nested context that shares the blackboard/tracer but tracks depth."""
+    def child(self, blackboard: Blackboard | None = None) -> RunContext:
+        """A nested context with optional isolated working memory."""
         return RunContext(
             task=self.task,
-            blackboard=self.blackboard,
+            blackboard=self.blackboard if blackboard is None else blackboard,
             tracer=self.tracer,
             scratch=self.scratch,
             depth=self.depth + 1,

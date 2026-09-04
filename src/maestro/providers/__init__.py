@@ -16,6 +16,7 @@ from maestro.config.settings import settings as default_settings
 from maestro.providers.anthropic_provider import AnthropicClient
 from maestro.providers.base import (
     EchoClient,
+    FallbackClient,
     LLMClient,
     LLMResponse,
     NullClient,
@@ -60,6 +61,7 @@ def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
             api_key=spec.api_key or s.anthropic_api_key,
             base_url=spec.base_url or s.anthropic_base_url,
             timeout=timeout,
+            options=spec.options,
         )
     if provider == "openai":
         return OpenAICompatClient(
@@ -69,6 +71,7 @@ def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
             timeout=timeout,
             name="openai",
             require_key=True,
+            options=spec.options,
         )
     if provider == "openai_compat":
         # Generic OpenAI-dialect gateway; key optional (local servers accept none).
@@ -79,6 +82,7 @@ def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
             timeout=timeout,
             name="openai_compat",
             require_key=False,
+            options=spec.options,
         )
     if provider == "llamacpp":
         return OpenAICompatClient(
@@ -88,12 +92,14 @@ def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
             timeout=timeout,
             name="llamacpp",
             require_key=False,
+            options=spec.options,
         )
     if provider == "ollama":
         return OllamaClient(
             model=spec.model,
             base_url=spec.base_url or s.ollama_base_url,
             timeout=timeout,
+            options=spec.options,
         )
     raise ValueError(f"unknown provider {spec.provider!r}; choose one of {', '.join(PROVIDERS)}")
 
@@ -101,8 +107,14 @@ def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
 def resolve_client(spec: ProviderSpec, settings=None) -> LLMClient:
     """Build the client, degrading to ``echo`` when unavailable (if permitted)."""
     s = settings or default_settings
+    provider = (spec.provider or "echo").lower().replace("-", "_")
     client = get_client(spec, s)
     if client.available:
+        if s.allow_stub_fallback and provider not in ("echo", "null"):
+            return FallbackClient(
+                client,
+                EchoClient(model=f"echo:{spec.provider}", persona=spec.persona),
+            )
         return client
     # Normalize the same way get_client() does, so "Null"/"NULL"/"null" are
     # recognized alike — otherwise a differently-cased "null" (which must stay
@@ -122,6 +134,7 @@ __all__ = [
     "PROVIDERS",
     "AnthropicClient",
     "EchoClient",
+    "FallbackClient",
     "LLMClient",
     "LLMResponse",
     "NullClient",

@@ -13,12 +13,19 @@ from maestro.topologies.base import SwarmResult, Topology
 class Swarm:
     """A named collection of agents conducted by a :class:`Topology`."""
 
-    def __init__(self, name: str, agents: list[Agent], topology: Topology) -> None:
+    def __init__(
+        self,
+        name: str,
+        agents: list[Agent],
+        topology: Topology,
+        prices: dict[str, tuple[float, float]] | None = None,
+    ) -> None:
         if not agents:
             raise ValueError("a swarm needs at least one agent")
         self.name = name
         self.agents = agents
         self.topology = topology
+        self.prices = dict(prices or {})
 
     def run(
         self,
@@ -47,6 +54,7 @@ class Swarm:
         context.tracer.emit("swarm_end", name=self.name, detail=("ok" if result.ok() else "error"))
         result.tracer = context.tracer
         result.usage_log = context.usage_log
+        result.prices = dict(self.prices)
         return result
 
     def agent_names(self) -> list[str]:

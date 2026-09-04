@@ -47,8 +47,17 @@ class HttpResult:
     headers: dict[str, str] = field(default_factory=dict)
 
     def json(self) -> dict:
+        """Decode an object response, preserving malformed-body diagnostics."""
+        if not self.body:
+            return {"_parse_error": "empty response body", "_raw": ""}
         try:
-            return json.loads(self.body) if self.body else {}
+            value = json.loads(self.body)
+            if not isinstance(value, dict):
+                return {
+                    "_parse_error": f"expected a JSON object, got {type(value).__name__}",
+                    "_raw": self.body[:2000],
+                }
+            return value
         except json.JSONDecodeError as exc:
             return {"_parse_error": str(exc), "_raw": self.body[:2000]}
 

@@ -4,7 +4,8 @@
 
 **Multi-Agent Ensemble Swarm Task-Routing Orchestrator** — a provider-agnostic
 orchestrator that *instantiates and conducts agent swarms*, in the spirit of the
-multi-agent systems from MiniMax and Kimi, but open and yours to configure.
+multi-agent systems from MiniMax and Kimi, and is source-available for you to
+configure. It is licensed CC BY-NC-SA 4.0, including a noncommercial restriction.
 
 Describe a swarm as plain data; MAESTRO brings it to life. Any agent may be
 backed by **any** LLM — Anthropic, OpenAI, any OpenAI-compatible gateway (Groq,
@@ -233,6 +234,7 @@ MCP mode (`type: isaac, mode: mcp`) drives their MCP servers instead of the CLI.
 | `MAESTRO_OPENAI_BASE_URL` | point OpenAI-compatible clients at any gateway |
 | `MAESTRO_ALLOW_STUB` | fall back to `echo` when a backend is unavailable (default on) |
 | `MAESTRO_ISAAC_CMD` / `MAESTRO_OLIVIA_CMD` | how to launch the sibling agents |
+| `MAESTRO_MCP_SPEC_ROOTS` | `os.pathsep`-separated directories allowed to MCP `run_spec`/`validate` (defaults to the server working directory) |
 
 ## MAESTRO as an MCP server
 
@@ -244,7 +246,9 @@ Expose the orchestrator itself so Claude (or a parent swarm) can spin up swarms:
 ```
 
 Tools: `maestro_run_demo`, `maestro_run_spec`, `maestro_validate`,
-`maestro_list_topologies`.
+`maestro_list_topologies`. The MCP server is a local, trusted-process interface;
+spec execution can launch external commands, so keep its allowlist narrow and do
+not expose its stdio process to untrusted callers.
 
 ## Examples
 

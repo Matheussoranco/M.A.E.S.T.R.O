@@ -28,6 +28,18 @@ def test_parallel_without_aggregator_concatenates():
     assert "[a]" in res.final and "[b]" in res.final
 
 
+def test_parallel_workers_use_one_initial_blackboard_snapshot():
+    agents = [_agent("a"), _agent("b"), _agent("c")]
+    res = Swarm("s", agents, build_topology("parallel")).run("task")
+
+    assert res.ok()
+    # No worker should see another worker's output while fan-out is running.
+    for agent_result in res.per_agent:
+        assert "- a:" not in agent_result.output
+        assert "- b:" not in agent_result.output
+        assert "- c:" not in agent_result.output
+
+
 def test_parallel_with_aggregator_uses_it():
     agents = [_agent("a"), _agent("b"), _agent("reducer")]
     res = Swarm("s", agents, build_topology("parallel", aggregator="reducer")).run("task")

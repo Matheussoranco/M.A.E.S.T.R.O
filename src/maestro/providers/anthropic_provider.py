@@ -133,11 +133,13 @@ class AnthropicClient(LLMClient):
         api_key: str = "",
         base_url: str = "https://api.anthropic.com",
         timeout: float = 120.0,
+        options: dict | None = None,
     ) -> None:
         self.model = model or DEFAULT_MODEL
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.options = dict(options or {})
 
     @property
     def available(self) -> bool:
@@ -146,6 +148,7 @@ class AnthropicClient(LLMClient):
     # -- request construction -------------------------------------------------
     def _payload(self, messages, system, max_tokens, temperature, tools) -> dict:
         payload: dict = {
+            **self.options,
             "model": self.model,
             "max_tokens": max_tokens or 1024,
             "messages": to_messages(messages),
@@ -193,6 +196,13 @@ class AnthropicClient(LLMClient):
                 error=res.error,
             )
         data = res.json()
+        if data.get("_parse_error"):
+            return LLMResponse(
+                model=self.model,
+                usage=Usage(provider=self.name, model=self.model),
+                raw=data,
+                error=f"invalid JSON response: {data['_parse_error']}",
+            )
         model = data.get("model", self.model)
         usage = data.get("usage") or {}
         tokens = Usage(
@@ -295,9 +305,11 @@ class _StreamState:
         self.output_tokens: int | None = None
         self.stop_reason = ""
         self.error = ""
+        self.saw_event = False
 
     def feed(self, event: dict) -> str:
         """Consume one frame; return newly produced visible text (if any)."""
+        self.saw_event = True
         kind = event.get("type", "")
         if kind == "message_start":
             usage = (event.get("message") or {}).get("usage") or {}
@@ -348,6 +360,8 @@ class _StreamState:
                 )
             )
         error = self.error
+        if not error and not self.saw_event:
+            error = "stream contained no valid JSON response events"
         if not error and self.stop_reason == "refusal":
             error = "request refused by Anthropic safety classifiers"
         return LLMResponse(

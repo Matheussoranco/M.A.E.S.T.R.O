@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "maestro-swarm"
-version = "0.2.0"
+version = "0.2.1"
 description = "Provider-agnostic orchestrator & instantiator of agent swarms (Anthropic, OpenAI, local LLMs, and sibling agents like I.S.A.A.C. and O.L.I.V.I.A.)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,10 +20,6 @@ dependencies = []
 
 [project.optional-dependencies]
 yaml = ["PyYAML>=6.0"]
-# Native SDKs are optional; MAESTRO's own stdlib transport covers these
-# providers already, so install these only if you prefer the vendored clients.
-anthropic = ["anthropic>=0.39"]
-openai = ["openai>=1.40"]
 dev = ["pytest>=8.0", "ruff==0.15.2", "PyYAML>=6.0"]  # ruff pinned: see ci.yml
 all = ["PyYAML>=6.0"]
 

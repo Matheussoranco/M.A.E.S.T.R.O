@@ -52,11 +52,20 @@ class SupervisorTopology(Topology):
 
         max_workers = max(1, min(len(assignments), self.params.get("max_workers", 8)))
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            # Workers must all see the same post-planning snapshot.  Otherwise
+            # completion order changes the prompts and therefore the synthesis.
+            initial = context.blackboard.snapshot()
+            message_offset = len(initial.messages())
+            worker_contexts = []
             futures = []
             for worker, subtask in assignments:
-                futures.append((worker, pool.submit(worker.run, subtask, context.child())))
+                worker_context = context.child(blackboard=initial.snapshot())
+                worker_contexts.append(worker_context)
+                futures.append((worker, pool.submit(worker.run, subtask, worker_context)))
             for _worker, fut in futures:
                 results.append(fut.result())
+            for worker_context in worker_contexts:
+                context.blackboard.merge_from(worker_context.blackboard, message_offset)
 
         # Supervisor synthesizes the workers' contributions.
         synth_prompt = (
