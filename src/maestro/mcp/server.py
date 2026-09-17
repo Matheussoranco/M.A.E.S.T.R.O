@@ -97,14 +97,21 @@ def _call_tool(name: str, args: dict) -> dict:
 
 
 def _safe_spec_path(raw_path: str) -> str:
-    """Resolve a spec path within the MCP server's configured trust roots."""
+    """Resolve a spec path within the MCP server's configured trust roots.
+
+    Default trust root is `./specs` (not the whole cwd): o servidor só lê
+    specs dentro de `./specs` salvo override explícito via
+    `MAESTRO_MCP_SPEC_ROOTS` (lista separada por os.pathsep). Documentado
+    para evitar exfiltração de arquivos arbitrários via `spec_path`.
+    """
     if not isinstance(raw_path, str) or not raw_path.strip():
         raise ValueError("spec_path must be a non-empty string")
     path = Path(raw_path).expanduser().resolve()
     roots_raw = os.environ.get("MAESTRO_MCP_SPEC_ROOTS", "")
     roots = [Path(root).expanduser().resolve() for root in roots_raw.split(os.pathsep) if root]
     if not roots:
-        roots = [Path.cwd().resolve()]
+        # Restrito a ./specs documentado — não mais o cwd amplo.
+        roots = [(Path.cwd() / "specs").resolve()]
     if not path.is_file():
         raise ValueError(f"spec file not found: {path}")
     if not any(path == root or root in path.parents for root in roots):

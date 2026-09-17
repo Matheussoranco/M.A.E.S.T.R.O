@@ -42,6 +42,11 @@ class Agent(abc.ABC):
         self.name = name
         self.role = role
         self.description = description
+        # Wall-clock budget (seconds) for one run() call.  Used by
+        # SupervisorTopology to bound future.result(timeout=...).
+        # Subclasses with their own I/O timeout (cli/mcp/external) override
+        # this in __init__; LLM agents inherit the 300 s default.
+        self.timeout: float = 300.0
 
     @property
     def available(self) -> bool:

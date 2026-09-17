@@ -39,6 +39,15 @@ _PRICES: dict[str, tuple[float, float]] = {
     "claude-sonnet-5": (3.0, 15.0),
     "claude-sonnet-4-6": (3.0, 15.0),
     "claude-haiku-4-5": (1.0, 5.0),
+    # Local / deterministic backends cost nothing to run: price them at 0
+    # instead of leaving them "unpriced" (unknown).  Substring matching still
+    # applies, so "echo:ollama", "ollama:llama3.1", "llama3.1", "local" etc.
+    # resolve here.
+    "echo": (0.0, 0.0),
+    "ollama": (0.0, 0.0),
+    "llama": (0.0, 0.0),
+    "local": (0.0, 0.0),
+    "null": (0.0, 0.0),
 }
 
 

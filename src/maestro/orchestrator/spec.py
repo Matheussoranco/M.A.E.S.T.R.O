@@ -49,6 +49,12 @@ class SwarmSpec:
     #: Lets a spec price models MAESTRO does not know — local models included,
     #: where the honest number is usually ``0``.
     prices: dict[str, tuple[float, float]] = field(default_factory=dict)
+    #: Unknown provider fields seen at load time (strict mode).  ``from_dict``
+    #: still builds the spec (unknown keys ignored for the live object) but
+    #: records them here so :meth:`validate` can report typos like ``modell``.
+    provider_unknown_keys: dict[str, list[str]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     # -- construction ---------------------------------------------------------
     @classmethod
@@ -65,26 +71,37 @@ class SwarmSpec:
         if not isinstance(raw_agents, list):
             raise ValueError("'agents' must be a list")
         providers: dict[str, ProviderSpec] = {}
+        provider_unknown_keys: dict[str, list[str]] = {}
         for key, pv in raw_providers.items():
             if isinstance(pv, str):
                 providers[key] = ProviderSpec(provider=pv)
             elif isinstance(pv, dict):
                 fields = ProviderSpec.__dataclass_fields__
+                unknown = sorted(k for k in pv if k not in fields)
+                if unknown:
+                    provider_unknown_keys[str(key)] = unknown
                 providers[key] = ProviderSpec(**{k: v for k, v in pv.items() if k in fields})
             else:
                 raise ValueError(f"provider {key!r} must be a string or mapping")
+        _raw_topology = data.get("topology", "sequential")
+        # isinstance FIRST, .lower() second — calling .lower() on a non-str
+        # (e.g. null/int from a hand-edited YAML) must not raise AttributeError.
+        _topology = (
+            _raw_topology.lower()
+            if isinstance(_raw_topology, str) and _raw_topology
+            else "sequential"
+            if not isinstance(_raw_topology, str)
+            else _raw_topology.lower()
+        )
         return cls(
             name=data.get("name", "swarm"),
             description=data.get("description", ""),
-            topology=(
-                data.get("topology", "sequential").lower()
-                if isinstance(data.get("topology", "sequential"), str)
-                else data.get("topology", "sequential")
-            ),
+            topology=_topology,
             topology_params=dict(raw_params),
             providers=providers,
             agents=list(raw_agents),
             prices=_parse_prices(data.get("prices")),
+            provider_unknown_keys=provider_unknown_keys,
         )
 
     @classmethod
@@ -172,6 +189,29 @@ class SwarmSpec:
                 problems.append(f"provider {key!r} field 'timeout' must be a positive number")
             if not isinstance(provider.options, dict):
                 problems.append(f"provider {key!r} field 'options' must be a mapping")
+
+        # Strict mode: unknown provider keys are typos (e.g. 'modell'), not
+        # silently ignored.  They were recorded at load time in
+        # ``provider_unknown_keys`` so validation can surface them.
+        for key, unknown in (self.provider_unknown_keys or {}).items():
+            problems.append(
+                f"provider {key!r} has unknown field(s): {', '.join(unknown)} "
+                f"(allowed: {', '.join(sorted(ProviderSpec.__dataclass_fields__))})"
+            )
+
+        # Prices schema: {model: (input, output)} with finite, non-negative
+        # dollars-per-MTok.  _parse_prices enforces this at load (raising),
+        # but specs built programmatically must still be caught here.
+        for model, pair in (self.prices or {}).items():
+            if (
+                not isinstance(pair, (list, tuple))
+                or len(pair) != 2
+                or any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in pair)
+            ):
+                problems.append(f"price for {model!r} must be [input, output] numbers")
+                continue
+            if not all(math.isfinite(v) and v >= 0 for v in pair):
+                problems.append(f"price for {model!r} must be finite and non-negative")
 
         for key in _AGENT_REF_PARAMS:
             ref = self.topology_params.get(key)

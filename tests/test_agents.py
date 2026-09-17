@@ -100,3 +100,43 @@ def test_external_presets_build():
     assert olivia.kind == "cli" and olivia.name == "olivia"
     # mcp mode yields an MCP adapter.
     assert isaac_agent(mode="mcp").kind == "mcp"
+
+
+def test_windows_cmd(monkeypatch):
+    """Olivia must preserve the integral MAESTRO_OLIVIA_CMD; CLI must keep C:\\ paths."""
+    import os as _os
+
+    from maestro.agents.cli_agent import split_command
+    from maestro.config.settings import Settings
+
+    # Integral preservation (POSIX-safe base): extra args must survive,
+    # and a subcommand override must replace — not drop — the rest.
+    s = Settings()
+    s.olivia_cmd = "python -m olivia ask --verbose"
+    assert olivia_agent(subcommand="ask", settings=s).command == [
+        "python",
+        "-m",
+        "olivia",
+        "ask",
+        "--verbose",
+    ]
+    assert olivia_agent(subcommand="solve", settings=s).command == [
+        "python",
+        "-m",
+        "olivia",
+        "solve",
+        "--verbose",
+    ]
+
+    # Windows branch: backslashes in C:\ paths must survive shlex splitting.
+    monkeypatch.setattr(_os, "name", "nt")
+    parts = split_command(r"C:\venv\Scripts\python.exe -m olivia ask")
+    assert parts[0] == r"C:\venv\Scripts\python.exe"
+    assert "ask" in parts
+    s2 = Settings()
+    s2.olivia_cmd = r"C:\venv\Scripts\python.exe -m olivia ask --verbose"
+    ag3 = olivia_agent(subcommand="ask", settings=s2)
+    assert ag3.command[0] == r"C:\venv\Scripts\python.exe"
+    assert "--verbose" in ag3.command
+    c = CLIAgent("w", command=r"C:\tools\agent.exe run --flag")
+    assert c.command[0] == r"C:\tools\agent.exe"

@@ -50,7 +50,8 @@ def build_agent(
     settings = settings or default_settings
     providers = providers or {}
     spec = dict(spec)
-    atype = (spec.get("type") or "llm").lower()
+    _raw_type = spec.get("type") or "llm"
+    atype = _raw_type.lower() if isinstance(_raw_type, str) else ""
     name = spec.get("name")
     if not name:
         raise ValueError("agent spec is missing required field 'name'")

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import abc
 import hashlib
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -34,6 +35,8 @@ from typing import Any
 from maestro.telemetry.usage import Usage
 from maestro.tools.base import Tool
 from maestro.tools.schema import ToolCall
+
+logger = logging.getLogger("maestro.providers")
 
 
 @dataclass
@@ -144,10 +147,12 @@ class LLMClient(abc.ABC):
         """Stream a completion.
 
         The default implementation is the graceful fallback: run the ordinary
-        completion and emit it as one text event plus the terminal event.  A
-        backend that cannot stream therefore still satisfies the interface, so
-        callers never need to ask whether streaming is available before using
-        it (:attr:`supports_streaming` says whether it is *incremental*).
+        completion and re-emit it as a **single chunk** (plus the terminal
+        event), so any backend satisfies the stream interface without
+        pretending to be incremental — concatenating the ``text`` fragments
+        still yields exactly ``complete()``'s text.  A backend with true
+        server-sent-event support overrides this and sets
+        :attr:`supports_streaming` to signal it is *incremental*.
         """
         # `tools` is only forwarded when actually requested: third-party
         # LLMClient implementations written against the 0.1 signature (which had
@@ -288,6 +293,11 @@ class FallbackClient(LLMClient):
             )
         if not response.error:
             return response
+        logger.warning(
+            "STUB fallback active for %r: %s — using 'echo' backend",
+            self.primary.name,
+            response.error,
+        )
         fallback = self.fallback.complete(messages, system, max_tokens, temperature)
         fallback.raw = {
             "fallback": True,
@@ -301,6 +311,7 @@ class FallbackClient(LLMClient):
     ) -> Iterator[StreamEvent]:
         parts: list[str] = []
         final: LLMResponse | None = None
+        saw_done = False
         try:
             if tools:
                 events = self.primary.complete_stream(
@@ -313,21 +324,36 @@ class FallbackClient(LLMClient):
                     parts.append(event.text)
                 if event.done:
                     final = event.response
+                    saw_done = True
                 yield event
         except Exception as exc:
             final = LLMResponse(
                 model=self.primary.model,
                 usage=Usage(provider=self.primary.name, model=self.primary.model),
+                text="".join(parts),
                 error=f"backend error: {exc}",
             )
+            # The primary died mid-stream after partial output: propagate a
+            # terminal error event instead of ending silently (which
+            # collect_stream would salvage as a success).
+            yield StreamEvent(done=True, response=final, error=final.error)
+            return
         if final is None:
+            # Ended without any terminal event: partial text must not become a
+            # silent success — mark it truncated.
+            text = "".join(parts)
             final = LLMResponse(
                 model=self.primary.model,
                 usage=Usage(provider=self.primary.name, model=self.primary.model),
-                text="".join(parts),
-                error="stream ended without a result" if not parts else "",
+                text=text,
+                error="stream ended without a result" if not text else "stream truncated without a terminal event",
             )
+            yield StreamEvent(done=True, response=final, error=final.error)
+            return
         if final.error and not parts:
             yield from self.fallback.complete_stream(
                 messages, system, max_tokens, temperature, tools=None
             )
+        # NB: final.error WITH partial text already reached the consumer as the
+        # primary's terminal error event above — no fallback (which would
+        # duplicate visible output) and no silent success.

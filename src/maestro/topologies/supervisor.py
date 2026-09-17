@@ -13,15 +13,35 @@ swarm still runs and produces output.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
-import re
 from concurrent.futures import ThreadPoolExecutor
 
 from maestro.agents.base import Agent, AgentResult
 from maestro.swarm.context import RunContext
 from maestro.topologies.base import SwarmResult, Topology
 
-_JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+
+def _extract_json_array(text: str) -> list | None:
+    """Extrai o primeiro array JSON válido via JSONDecoder.raw_decode.
+
+    Substitui o antigo ``re.compile(r"\\[.*\\]", re.DOTALL)`` greedy, que
+    casava do primeiro ``[`` até o ÚLTIMO ``]`` do texto — unindo arrays
+    distintos, engolindo texto posterior e falhando no json.loads.
+    Aqui cada candidato ``[`` é tentado com raw_decode (balanceado,
+    string-aware); o primeiro que decodifica para list é retornado.
+    """
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch != "[":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(text[i:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, list):
+            return obj
+    return None
 
 
 class SupervisorTopology(Topology):
@@ -62,8 +82,30 @@ class SupervisorTopology(Topology):
                 worker_context = context.child(blackboard=initial.snapshot())
                 worker_contexts.append(worker_context)
                 futures.append((worker, pool.submit(worker.run, subtask, worker_context)))
-            for _worker, fut in futures:
-                results.append(fut.result())
+            for worker, fut in futures:
+                # Bound each worker by its own timeout so one hung backend
+                # cannot stall the whole swarm; exceptions become error results.
+                timeout = getattr(worker, "timeout", None)
+                if timeout is None:
+                    timeout = self.params.get("worker_timeout", 300.0)
+                try:
+                    results.append(fut.result(timeout=timeout))
+                except concurrent.futures.TimeoutError as exc:
+                    results.append(
+                        AgentResult(
+                            name=worker.name,
+                            role=getattr(worker, "role", ""),
+                            error=f"worker timed out after {timeout}s: {exc}",
+                        )
+                    )
+                except Exception as exc:  # never let one worker kill the swarm
+                    results.append(
+                        AgentResult(
+                            name=worker.name,
+                            role=getattr(worker, "role", ""),
+                            error=f"worker raised {type(exc).__name__}: {exc}",
+                        )
+                    )
             for worker_context in worker_contexts:
                 context.blackboard.merge_from(worker_context.blackboard, message_offset)
 
@@ -105,10 +147,10 @@ class SupervisorTopology(Topology):
         plan_res = supervisor.run(plan_prompt, context)
         by_name = {w.name.lower(): w for w in workers}
         assignments: list[tuple[Agent, str]] = []
-        match = _JSON_ARRAY_RE.search(plan_res.output or "")
-        if match:
+        items = _extract_json_array(plan_res.output or "")
+        if items is not None:
             try:
-                for item in json.loads(match.group(0)):
+                for item in items:
                     if not isinstance(item, dict):
                         continue
                     who = str(item.get("agent") or item.get("worker") or item.get("name") or "")

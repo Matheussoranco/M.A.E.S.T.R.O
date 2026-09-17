@@ -7,8 +7,11 @@ default; the object is cheap to construct and safe to import with no env at all.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
+
+logger = logging.getLogger("maestro.config")
 
 
 def _env(*names: str, default: str = "") -> str:
@@ -25,6 +28,53 @@ def _bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _default_stub_fallback() -> bool:
+    """Default for ``allow_stub_fallback``: False, except demo/test.
+
+    Explicit ``MAESTRO_ALLOW_STUB`` always wins.  Otherwise True only when
+    running under pytest (``PYTEST_CURRENT_TEST`` set or ``pytest`` already
+    imported) or when ``MAESTRO_DEMO=1`` is set — every other context
+    defaults to False so production failures surface instead of silently
+    degrading to the ``echo`` stub.
+    """
+    import sys as _sys
+
+    raw = os.environ.get("MAESTRO_ALLOW_STUB")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    if os.environ.get("MAESTRO_DEMO", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+    if "pytest" in _sys.modules:
+        return True
+    return False
+
+
+def _env_float(name: str, default: float) -> float:
+    """Parse ``os.environ[name]`` as float, falling back to *default*."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        logger.warning("invalid float for %s=%r — using default %r", name, raw, default)
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    """Parse ``os.environ[name]`` as int, falling back to *default*."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw.strip())
+    except (TypeError, ValueError):
+        logger.warning("invalid int for %s=%r — using default %r", name, raw, default)
+        return default
 
 
 @dataclass
@@ -72,14 +122,16 @@ class Settings:
 
     # When a requested provider is unavailable (missing key, unreachable host)
     # fall back to the deterministic offline ``echo`` backend instead of failing,
-    # so a swarm's structure can always be exercised.  On by default.
-    allow_stub_fallback: bool = field(default_factory=lambda: _bool("MAESTRO_ALLOW_STUB", True))
+    # so a swarm's structure can always be exercised.  Off by default outside
+    # demo/test: silent stub use in production hides billing/config errors.
+    # Opt in explicitly via ``MAESTRO_ALLOW_STUB=1`` (or ``--allow-stub`` on
+    # the CLI).  Under pytest the default stays True so the offline suite
+    # remains deterministic without extra env setup.
+    allow_stub_fallback: bool = field(default_factory=_default_stub_fallback)
 
     # Per-request ceilings.
-    request_timeout: float = field(
-        default_factory=lambda: float(_env("MAESTRO_TIMEOUT", default="120"))
-    )
-    max_tokens: int = field(default_factory=lambda: int(_env("MAESTRO_MAX_TOKENS", default="1024")))
+    request_timeout: float = field(default_factory=lambda: _env_float("MAESTRO_TIMEOUT", 120.0))
+    max_tokens: int = field(default_factory=lambda: _env_int("MAESTRO_MAX_TOKENS", 1024))
 
     # Commands used to enlist the sibling projects as swarm members.  Overridable
     # so users with per-project virtualenvs can point at the right interpreter,

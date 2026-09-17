@@ -16,13 +16,13 @@ from __future__ import annotations
 import json
 import os
 import queue
-import shlex
 import shutil
 import subprocess
 import threading
 import time
 
 from maestro.agents.base import Agent, AgentResult
+from maestro.agents.cli_agent import _filtered_env, split_command
 from maestro.swarm.context import RunContext
 
 
@@ -43,9 +43,10 @@ class MCPAgent(Agent):
         timeout: float = 300.0,
     ) -> None:
         super().__init__(name=name, role=role, description=description)
-        self.server_cmd = (
-            shlex.split(server_cmd) if isinstance(server_cmd, str) else list(server_cmd)
-        )
+        if isinstance(server_cmd, str):
+            self.server_cmd = split_command(server_cmd)
+        else:
+            self.server_cmd = list(server_cmd)
         self.tool = tool
         self.arg_key = arg_key
         self.extra_args = extra_args or {}
@@ -84,7 +85,9 @@ class MCPAgent(Agent):
 
     # -- stdio JSON-RPC plumbing ---------------------------------------------
     def _call_tool(self, task: str) -> str:
-        run_env = {**os.environ, **self.env} if self.env else None
+        # Mesmo filtro do CLIAgent: ambiente mínimo + allowlist, sem vazar
+        # secrets do pai (*KEY/*TOKEN*/etc). Nunca herda os.environ cru.
+        run_env = _filtered_env(self.env)
         proc = subprocess.Popen(
             self.server_cmd,
             stdin=subprocess.PIPE,

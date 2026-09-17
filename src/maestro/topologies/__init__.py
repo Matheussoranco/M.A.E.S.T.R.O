@@ -19,7 +19,7 @@ TOPOLOGIES: dict[str, type[Topology]] = {
 
 
 def build_topology(name: str, **params) -> Topology:
-    key = (name or "sequential").lower()
+    key = name.lower() if isinstance(name, str) and name else "sequential"
     if key not in TOPOLOGIES:
         raise ValueError(
             f"unknown topology {name!r}; choose one of {', '.join(sorted(TOPOLOGIES))}"

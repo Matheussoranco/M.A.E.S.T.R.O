@@ -8,12 +8,43 @@ separate virtualenvs can point at the right interpreter without touching code.
 
 from __future__ import annotations
 
-import shlex
-
 from maestro.agents.base import Agent
-from maestro.agents.cli_agent import CLIAgent
+from maestro.agents.cli_agent import CLIAgent, split_command
 from maestro.agents.mcp_agent import MCPAgent
 from maestro.config.settings import settings as default_settings
+
+#: Subcommands understood by O.L.I.V.I.A.'s CLI entry point.
+OLIVIA_SUBCOMMANDS = ("ask", "solve")
+
+
+def _olivia_cmd(base: list[str], subcommand: str) -> list[str]:
+    """Merge a configured base command with the requested subcommand.
+
+    Preserves the integral configured command (interpreter, ``-m`` flags,
+    extra args) instead of truncating to ``[base[0], subcommand]``:
+
+    * ``[]`` → ``["olivia", subcommand]``
+    * ``["olivia"]`` → ``["olivia", subcommand]``
+    * base already carries the wanted subcommand → ``base`` unchanged
+    * base carries the *other* known subcommand → replace it, keep the rest
+    * base carries the wanted subcommand deeper (e.g. ``python -m olivia ask``)
+      → ``base`` unchanged
+    * otherwise → ``base + [subcommand]``
+    """
+    if not base:
+        return ["olivia", subcommand]
+    if len(base) == 1:
+        return [base[0], subcommand]
+    if base[1] == subcommand:
+        return list(base)
+    if base[1] in OLIVIA_SUBCOMMANDS:
+        return [base[0], subcommand, *base[2:]]
+    if subcommand in base:
+        return list(base)
+    for i, tok in enumerate(base):
+        if tok in OLIVIA_SUBCOMMANDS:
+            return [*base[:i], subcommand, *base[i + 1 :]]
+    return [*base, subcommand]
 
 
 def isaac_agent(
@@ -43,7 +74,7 @@ def isaac_agent(
             timeout=timeout,
             cwd=cwd,
         )
-    cmd = shlex.split(command) if command else shlex.split(s.isaac_cmd)
+    cmd = split_command(command) if command else split_command(s.isaac_cmd)
     return CLIAgent(
         name=name,
         role=role,
@@ -80,11 +111,13 @@ def olivia_agent(
             cwd=cwd,
         )
     if command:
-        cmd = shlex.split(command)
+        cmd = split_command(command)
     else:
-        base = shlex.split(s.olivia_cmd)
-        # Respect an explicit subcommand override (ask vs solve).
-        cmd = [base[0], subcommand] if base else ["olivia", subcommand]
+        base = split_command(s.olivia_cmd)
+        # Respect an explicit subcommand override (ask vs solve) while
+        # preserving the integral configured command (interpreter, -m flags,
+        # extra args) — see _olivia_cmd.
+        cmd = _olivia_cmd(base, subcommand)
     return CLIAgent(
         name=name,
         role=role,

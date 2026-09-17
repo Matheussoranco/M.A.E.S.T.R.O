@@ -24,6 +24,10 @@ from collections.abc import Callable
 DEFAULT_ARG = "input"
 
 
+class ToolError(RuntimeError):
+    """A tool failed in a way that should be reported, not crash the swarm."""
+
+
 class Tool(abc.ABC):
     name: str = "tool"
     description: str = ""

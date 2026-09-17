@@ -22,9 +22,45 @@ maestro version
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 import sys
 
 from maestro import __version__
+
+logger = logging.getLogger("maestro.cli")
+
+STUB_BANNER = (
+    "[MAESTRO] STUB fallback ENABLED — unavailable providers will use the "
+    "deterministic 'echo' backend. Pass --allow-stub explicitly to acknowledge "
+    "(or set MAESTRO_ALLOW_STUB=1/0)."
+)
+
+
+def _cli_settings(args):
+    """Effective settings for CLI runs.
+
+    The library default is ``allow_stub_fallback=False`` outside demo/test
+    (``MAESTRO_ALLOW_STUB`` opts in, pytest/demo opt out via
+    ``_default_stub_fallback``); the CLI is equally strict: silent stub use
+    requires explicit opt-in via ``--allow-stub`` or ``MAESTRO_ALLOW_STUB``
+    in the environment.  Otherwise fallback is disabled for this invocation.  When fallback stays enabled a
+    STUB banner (stderr, so ``--json`` stdout stays clean) plus
+    ``logger.warning`` are emitted.
+    """
+    from maestro.config.settings import Settings
+
+    s = Settings()
+    explicit_flag = bool(getattr(args, "allow_stub", False))
+    explicit_env = "MAESTRO_ALLOW_STUB" in os.environ
+    if explicit_flag:
+        s.allow_stub_fallback = True
+    elif not explicit_env:
+        s.allow_stub_fallback = False
+    if s.allow_stub_fallback:
+        logger.warning("STUB fallback enabled — providers may degrade to 'echo' backend")
+        print(STUB_BANNER, file=sys.stderr)
+    return s
 
 
 def _print(*args) -> None:
@@ -111,7 +147,7 @@ def cmd_run(args) -> int:
     from maestro.orchestrator import Orchestrator
 
     try:
-        orch = Orchestrator.from_file(args.spec)
+        orch = Orchestrator.from_file(args.spec, settings=_cli_settings(args))
     except Exception as exc:
         _print(f"error: {exc}")
         return 2
@@ -154,7 +190,7 @@ def cmd_demo(args) -> int:
     from maestro.demo import demo_spec
     from maestro.orchestrator import Orchestrator
 
-    orch = Orchestrator.from_dict(demo_spec())
+    orch = Orchestrator.from_dict(demo_spec(), settings=_cli_settings(args))
     task = args.task or "Design a plan to evaluate a new AI agent on ARC-AGI-2."
     result = _run_swarm(orch, task, args)
     _emit_result(result, args.json, args.usage)
@@ -213,8 +249,13 @@ def cmd_agents(_args) -> int:
 
 
 def cmd_mcp_serve(_args) -> int:
+    from maestro.config import settings as cfg
     from maestro.mcp.server import serve
 
+    effective = _cli_settings(_args)
+    # The MCP server builds swarms internally from the module-global settings;
+    # propagate the explicit opt-in so `mcp-serve` honors the same policy.
+    cfg.settings.allow_stub_fallback = effective.allow_stub_fallback
     serve()
     return 0
 
@@ -446,6 +487,11 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     pr.add_argument("--stream", action="store_true", help="print tokens as they arrive")
     pr.add_argument("--usage", action="store_true", help="print the token/cost report")
+    pr.add_argument(
+        "--allow-stub",
+        action="store_true",
+        help="explicitly allow fallback to the deterministic 'echo' stub backend",
+    )
     pr.set_defaults(func=cmd_run)
 
     pv = sub.add_parser("validate", help="validate a spec without running it")
@@ -462,6 +508,11 @@ def build_parser() -> argparse.ArgumentParser:
     pm.add_argument("--stream", action="store_true", help="print tokens as they arrive")
     pm.add_argument("--usage", action="store_true", help="print the token/cost report")
     pm.add_argument("--no-trace", action="store_true", help="disable the run trace")
+    pm.add_argument(
+        "--allow-stub",
+        action="store_true",
+        help="explicitly allow fallback to the deterministic 'echo' stub backend",
+    )
     pm.set_defaults(func=cmd_demo)
 
     sub.add_parser("providers", help="list providers and configuration").set_defaults(
@@ -472,9 +523,13 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_prices
     )
     sub.add_parser("agents", help="list agent types and tools").set_defaults(func=cmd_agents)
-    sub.add_parser("mcp-serve", help="expose MAESTRO over MCP (stdio)").set_defaults(
-        func=cmd_mcp_serve
+    ms = sub.add_parser("mcp-serve", help="expose MAESTRO over MCP (stdio)")
+    ms.add_argument(
+        "--allow-stub",
+        action="store_true",
+        help="explicitly allow fallback to the deterministic 'echo' stub backend",
     )
+    ms.set_defaults(func=cmd_mcp_serve)
     sub.add_parser("version", help="print version").set_defaults(func=cmd_version)
 
     pc = sub.add_parser("config", help="show effective settings (redacted)")

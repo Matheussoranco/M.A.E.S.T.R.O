@@ -45,10 +45,17 @@ class ProviderSpec:
     options: dict = field(default_factory=dict)
 
 
+def _normalize_provider(raw: object) -> str:
+    """Lower-case provider id only when it is a string (else fall back to echo)."""
+    if isinstance(raw, str) and raw:
+        return raw.lower().replace("-", "_")
+    return "echo"
+
+
 def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
     """Instantiate the exact backend named by *spec* (no fallback applied)."""
     s = settings or default_settings
-    provider = (spec.provider or "echo").lower().replace("-", "_")
+    provider = _normalize_provider(spec.provider)
     timeout = spec.timeout if spec.timeout is not None else s.request_timeout
 
     if provider == "echo":
@@ -106,11 +113,21 @@ def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
 
 def resolve_client(spec: ProviderSpec, settings=None) -> LLMClient:
     """Build the client, degrading to ``echo`` when unavailable (if permitted)."""
+    import sys
+
     s = settings or default_settings
-    provider = (spec.provider or "echo").lower().replace("-", "_")
+    provider = _normalize_provider(spec.provider)
     client = get_client(spec, s)
     if client.available:
         if s.allow_stub_fallback and provider not in ("echo", "null"):
+            logger.warning(
+                "STUB fallback armed for provider %r — failures will degrade to 'echo'",
+                spec.provider,
+            )
+            print(
+                f"[MAESTRO] STUB fallback armed for {spec.provider!r} (failures degrade to 'echo')",
+                file=sys.stderr,
+            )
             return FallbackClient(
                 client,
                 EchoClient(model=f"echo:{spec.provider}", persona=spec.persona),
@@ -120,11 +137,16 @@ def resolve_client(spec: ProviderSpec, settings=None) -> LLMClient:
     # recognized alike — otherwise a differently-cased "null" (which must stay
     # unavailable to force symbolic fallback) would be silently upgraded to a
     # working EchoClient here.
-    provider = (spec.provider or "echo").lower().replace("-", "_")
+    provider = _normalize_provider(spec.provider)
     if s.allow_stub_fallback and provider not in ("echo", "null"):
         logger.warning(
-            "provider %r unavailable — falling back to deterministic 'echo' backend",
+            "STUB fallback active: provider %r unavailable — "
+            "falling back to deterministic 'echo' backend",
             spec.provider,
+        )
+        print(
+            f"[MAESTRO] STUB fallback active for {spec.provider!r} (unavailable — using 'echo')",
+            file=sys.stderr,
         )
         return EchoClient(model=f"echo:{spec.provider}", persona=spec.persona)
     return client
