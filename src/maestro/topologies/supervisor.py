@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from maestro.agents.base import Agent, AgentResult
@@ -71,7 +72,9 @@ class SupervisorTopology(Topology):
         results: list[AgentResult] = []
 
         max_workers = max(1, min(len(assignments), self.params.get("max_workers", 8)))
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        pool = ThreadPoolExecutor(max_workers=max_workers)
+        completed_contexts = []
+        try:
             # Workers must all see the same post-planning snapshot.  Otherwise
             # completion order changes the prompts and therefore the synthesis.
             initial = context.blackboard.snapshot()
@@ -81,16 +84,26 @@ class SupervisorTopology(Topology):
             for worker, subtask in assignments:
                 worker_context = context.child(blackboard=initial.snapshot())
                 worker_contexts.append(worker_context)
-                futures.append((worker, pool.submit(worker.run, subtask, worker_context)))
-            for worker, fut in futures:
+                timeout = float(
+                    self.params.get("worker_timeout", getattr(worker, "timeout", 300.0))
+                )
+                futures.append(
+                    (
+                        worker,
+                        pool.submit(worker.run, subtask, worker_context),
+                        time.monotonic() + timeout,
+                        worker_context,
+                    )
+                )
+            for worker, fut, deadline, worker_context in futures:
                 # Bound each worker by its own timeout so one hung backend
                 # cannot stall the whole swarm; exceptions become error results.
-                timeout = getattr(worker, "timeout", None)
-                if timeout is None:
-                    timeout = self.params.get("worker_timeout", 300.0)
+                timeout = max(0.0, deadline - time.monotonic())
                 try:
                     results.append(fut.result(timeout=timeout))
+                    completed_contexts.append(worker_context)
                 except concurrent.futures.TimeoutError as exc:
+                    fut.cancel()
                     results.append(
                         AgentResult(
                             name=worker.name,
@@ -106,8 +119,13 @@ class SupervisorTopology(Topology):
                             error=f"worker raised {type(exc).__name__}: {exc}",
                         )
                     )
-            for worker_context in worker_contexts:
+            for worker_context in completed_contexts:
                 context.blackboard.merge_from(worker_context.blackboard, message_offset)
+        finally:
+            # __exit__ waits for running workers, defeating result(timeout=...).
+            # Running threads cannot be killed; their isolated boards are never
+            # merged after timeout. Providers must enforce their own I/O timeout.
+            pool.shutdown(wait=False, cancel_futures=True)
 
         # Supervisor synthesizes the workers' contributions.
         synth_prompt = (

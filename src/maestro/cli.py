@@ -44,8 +44,8 @@ def _cli_settings(args):
     (``MAESTRO_ALLOW_STUB`` opts in, pytest/demo opt out via
     ``_default_stub_fallback``); the CLI is equally strict: silent stub use
     requires explicit opt-in via ``--allow-stub`` or ``MAESTRO_ALLOW_STUB``
-    in the environment.  Otherwise fallback is disabled for this invocation.  When fallback stays enabled a
-    STUB banner (stderr, so ``--json`` stdout stays clean) plus
+    in the environment.  Otherwise fallback is disabled for this invocation.
+    When fallback stays enabled a STUB banner (stderr, so ``--json`` stdout stays clean) plus
     ``logger.warning`` are emitted.
     """
     from maestro.config.settings import Settings

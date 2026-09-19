@@ -48,9 +48,7 @@ def _default_stub_fallback() -> bool:
         return True
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return True
-    if "pytest" in _sys.modules:
-        return True
-    return False
+    return "pytest" in _sys.modules
 
 
 def _env_float(name: str, default: float) -> float:

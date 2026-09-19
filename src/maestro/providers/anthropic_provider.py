@@ -11,7 +11,7 @@ import json
 import logging
 from collections.abc import Iterator
 
-from maestro.providers._http import HttpStreamError, post_json, stream_lines
+from maestro.providers._http import HttpStreamError, post_json, stream_lines, validate_url
 from maestro.providers.base import LLMClient, LLMResponse, StreamEvent
 from maestro.telemetry.usage import Usage
 from maestro.tools.schema import ToolCall, to_anthropic
@@ -183,8 +183,17 @@ class AnthropicClient(LLMClient):
     ) -> LLMResponse:
         if not self.available:
             return self._unavailable()
+        url = f"{self.base_url}/v1/messages"
+        try:
+            validate_url(url)
+        except ValueError as exc:
+            return LLMResponse(
+                model=self.model,
+                usage=Usage(provider=self.name, model=self.model),
+                error=f"blocked provider endpoint: {exc}",
+            )
         res = post_json(
-            f"{self.base_url}/v1/messages",
+            url,
             self._payload(messages, system, max_tokens, temperature, tools),
             headers=self._headers(),
             timeout=self.timeout,
@@ -255,9 +264,23 @@ class AnthropicClient(LLMClient):
         payload = self._payload(messages, system, max_tokens, temperature, tools)
         payload["stream"] = True
         state = _StreamState(provider=self.name, model=self.model)
+        url = f"{self.base_url}/v1/messages"
+        try:
+            validate_url(url)
+        except ValueError as exc:
+            yield StreamEvent(
+                done=True,
+                error=f"blocked provider endpoint: {exc}",
+                response=LLMResponse(
+                    model=self.model,
+                    usage=Usage(provider=self.name, model=self.model),
+                    error=f"blocked provider endpoint: {exc}",
+                ),
+            )
+            return
         try:
             for line in stream_lines(
-                f"{self.base_url}/v1/messages",
+                url,
                 payload,
                 headers=self._headers(),
                 timeout=self.timeout,

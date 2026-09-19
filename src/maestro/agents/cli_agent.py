@@ -26,8 +26,18 @@ _SECRET_HINTS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL")
 
 def _filtered_env(extra: dict[str, str] | None) -> dict[str, str]:
     """Ambiente mínimo + extras explícitos, sem vazar secrets do pai."""
-    keep = {"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "LANG", "LC_ALL",
-            "TEMP", "TMP", "HOME", "USERPROFILE"}
+    keep = {
+        "PATH",
+        "PATHEXT",
+        "SYSTEMROOT",
+        "WINDIR",
+        "LANG",
+        "LC_ALL",
+        "TEMP",
+        "TMP",
+        "HOME",
+        "USERPROFILE",
+    }
     base = {k: v for k, v in os.environ.items() if k in keep}
     for k, v in (extra or {}).items():
         upper = k.upper()

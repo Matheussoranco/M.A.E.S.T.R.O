@@ -18,12 +18,16 @@ from __future__ import annotations
 import contextlib
 import datetime
 import email.utils
+import ipaddress
 import json
+import os
+import socket
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 #: Status codes worth another attempt.  429 means "slow down" and 529 is
 #: Anthropic's "overloaded"; both are explicitly transient.  Everything else —
@@ -37,6 +41,90 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_BACKOFF = 0.5
 #: Upper bound on any single wait, including a server-supplied ``retry-after``.
 MAX_BACKOFF = 30.0
+MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+MAX_LINE_BYTES = 1024 * 1024
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Never forward API credentials or prompt bodies to another endpoint.
+        return None
+
+
+def _allow_private_urls() -> bool:
+    """True only when ``MAESTRO_ALLOW_PRIVATE_URLS=true`` (Ollama/local dev).
+
+    Cloud providers must never exfiltrate API keys to private/loopback
+    endpoints; local Ollama (``http://localhost:11434``) opts in explicitly.
+    """
+    return os.getenv("MAESTRO_ALLOW_PRIVATE_URLS", "").strip().lower() == "true"
+
+
+def validate_url(url: str) -> None:
+    """Block SSRF endpoints before any API key is sent.
+
+    Allows only ``http``/``https`` without userinfo/fragment; blocks
+    private/loopback/link-local/reserved/multicast/unspecified (plus cloud
+    metadata) unless :func:`_allow_private_urls` opts in — in which case
+    private + loopback are allowed (Ollama) but link-local/multicast/
+    unspecified/reserved/metadata stay blocked.
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in {"http", "https"} or not parts.hostname:
+        raise ValueError("provider endpoint must be an HTTP(S) URL")
+    if parts.username is not None or parts.password is not None or parts.fragment:
+        raise ValueError("provider endpoint must not contain userinfo or a fragment")
+    if parts.hostname.lower().rstrip(".") == "metadata.google.internal":
+        raise ValueError("metadata endpoints are not model providers")
+    allow_private = _allow_private_urls()
+    try:
+        infos = socket.getaddrinfo(
+            parts.hostname,
+            parts.port or (443 if parts.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
+    except socket.gaierror as exc:
+        raise ValueError(f"provider endpoint does not resolve: {exc}") from exc
+    for info in infos:
+        address = ipaddress.ip_address(info[4][0].split("%", 1)[0])
+        address = getattr(address, "ipv4_mapped", None) or address
+        # Always forbidden: exfiltration/redirect targets.
+        if (
+            address.is_multicast
+            or address.is_unspecified
+            or address.is_reserved
+            or str(address) == "100.100.100.200"
+        ):
+            raise ValueError("provider endpoint resolves to a prohibited address")
+        if address.is_link_local:
+            raise ValueError("provider endpoint resolves to a prohibited address")
+        if not allow_private and (address.is_private or address.is_loopback):
+            raise ValueError(
+                "provider endpoint resolves to a private address; "
+                "set MAESTRO_ALLOW_PRIVATE_URLS=true to allow local endpoints (Ollama)"
+            )
+
+
+def _validate_endpoint(url: str) -> None:
+    """Validate configured endpoints; local/LAN model servers remain supported.
+
+    Specs are trusted executable configuration, not untrusted user input. This
+    blocks metadata/link-local endpoints and credential-bearing redirects; it
+    does not turn a configurable provider into a general-purpose URL sandbox.
+    """
+    validate_url(url)
+
+
+def _open(req, timeout):
+    _validate_endpoint(req.full_url)
+    return urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout)
+
+
+def _bounded_body(resp, limit=MAX_RESPONSE_BYTES):
+    body = resp.read(limit + 1)
+    if len(body) > limit:
+        raise ValueError("provider response exceeds size limit")
+    return body.decode("utf-8", "replace")
 
 
 @dataclass
@@ -96,10 +184,10 @@ def _collect_headers(source: object) -> dict[str, str]:
 
 def _attempt(url: str, data: bytes, headers: dict[str, str], timeout: float) -> HttpResult:
     """One POST round-trip.  Never raises; failures come back as an HttpResult."""
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", "replace")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with _open(req, timeout) as resp:
+            body = _bounded_body(resp)
             return HttpResult(
                 status=getattr(resp, "status", 200),
                 body=body,
@@ -108,7 +196,7 @@ def _attempt(url: str, data: bytes, headers: dict[str, str], timeout: float) -> 
     except urllib.error.HTTPError as exc:
         detail = ""
         with contextlib.suppress(Exception):
-            detail = exc.read().decode("utf-8", "replace")
+            detail = _bounded_body(exc, 4096)
         return HttpResult(
             status=exc.code,
             error=f"HTTP {exc.code}: {detail[:500]}",
@@ -183,15 +271,22 @@ def stream_lines(
         "Accept": "text/event-stream",
     }
     hdrs.update(headers or {})
-    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            for raw in resp:
+        req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+        with _open(req, timeout) as resp:
+            total = 0
+            while True:
+                raw = resp.readline(MAX_LINE_BYTES + 1)
+                if not raw:
+                    break
+                total += len(raw)
+                if len(raw) > MAX_LINE_BYTES or total > MAX_RESPONSE_BYTES:
+                    raise HttpStreamError("provider stream exceeds size limit")
                 yield raw.decode("utf-8", "replace").rstrip("\r\n")
     except urllib.error.HTTPError as exc:
         detail = ""
         with contextlib.suppress(Exception):
-            detail = exc.read().decode("utf-8", "replace")
+            detail = _bounded_body(exc, 4096)
         raise HttpStreamError(f"HTTP {exc.code}: {detail[:500]}") from exc
     except urllib.error.URLError as exc:
         raise HttpStreamError(f"connection error: {exc.reason}") from exc

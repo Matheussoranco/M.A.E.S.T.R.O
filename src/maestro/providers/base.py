@@ -311,7 +311,6 @@ class FallbackClient(LLMClient):
     ) -> Iterator[StreamEvent]:
         parts: list[str] = []
         final: LLMResponse | None = None
-        saw_done = False
         try:
             if tools:
                 events = self.primary.complete_stream(
@@ -324,7 +323,6 @@ class FallbackClient(LLMClient):
                     parts.append(event.text)
                 if event.done:
                     final = event.response
-                    saw_done = True
                 yield event
         except Exception as exc:
             final = LLMResponse(
@@ -346,7 +344,9 @@ class FallbackClient(LLMClient):
                 model=self.primary.model,
                 usage=Usage(provider=self.primary.name, model=self.primary.model),
                 text=text,
-                error="stream ended without a result" if not text else "stream truncated without a terminal event",
+                error="stream ended without a result"
+                if not text
+                else "stream truncated without a terminal event",
             )
             yield StreamEvent(done=True, response=final, error=final.error)
             return
