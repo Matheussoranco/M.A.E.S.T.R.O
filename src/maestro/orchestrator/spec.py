@@ -166,11 +166,11 @@ class SwarmSpec:
             if atype in {"laya", "laya-onnx", "jev"}:
                 _positive_number(problems, ag, "timeout", f"agent {name!r}")
             if atype in {"cli", "mcp", "isaac", "olivia"}:
-                    command_key = "command" if atype == "cli" else "server_cmd"
-                    if command_key in ag and not isinstance(ag[command_key], (str, list)):
-                        problems.append(
-                            f"agent {name!r} field '{command_key}' must be a string or list"
-                        )
+                command_key = "command" if atype == "cli" else "server_cmd"
+                if command_key in ag and not isinstance(ag[command_key], (str, list)):
+                    problems.append(
+                        f"agent {name!r} field '{command_key}' must be a string or list"
+                    )
 
         if self.topology in {"parallel", "supervisor"}:
             _positive_int(problems, self.topology_params, "max_workers", "topology_params")

@@ -7,15 +7,17 @@ resolved against the swarm's named provider table.
 
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Any
 
 from maestro.agents.base import Agent
 from maestro.agents.cli_agent import CLIAgent
-from maestro.agents.decision_agent import JevAgent, LayaAgent, LayaONNXAgent
 from maestro.agents.decision_agent import (
     ChoiceQuestion,
-    ScoreQuestion,
+    JevAgent,
+    LayaAgent,
+    LayaONNXAgent,
     NoulQuestion,
+    ScoreQuestion,
 )
 from maestro.agents.external import isaac_agent, olivia_agent
 from maestro.agents.llm_agent import LLMAgent
@@ -49,7 +51,7 @@ def _provider_spec(agent_spec: dict, providers: dict[str, ProviderSpec], setting
     return base
 
 
-def _parse_questions(raw: object) -> Dict[str, Any]:
+def _parse_questions(raw: object) -> dict[str, Any]:
     """Parse a questions dict from spec into Question dataclasses."""
     if not raw or not isinstance(raw, dict):
         return {}

@@ -14,14 +14,15 @@ Configuration via environment variables:
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
+from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel
 
 from maestro.orchestrator import Orchestrator
 from maestro.swarm.context import RunContext
@@ -33,8 +34,8 @@ from maestro.telemetry.tracer import Tracer
 
 
 class NoulCriteria(BaseModel):
-    true: Optional[str] = None
-    false: Optional[str] = None
+    true: str | None = None
+    false: str | None = None
 
 
 class NoulLabels(BaseModel):
@@ -45,7 +46,7 @@ class NoulLabels(BaseModel):
 class ChoiceQuestion(BaseModel):
     type: str = "choice"
     instructions: str
-    criteria: Dict[str, Optional[str]]
+    criteria: dict[str, str | None]
 
 
 class ScoreQuestion(BaseModel):
@@ -57,35 +58,35 @@ class ScoreQuestion(BaseModel):
 class NoulQuestion(BaseModel):
     type: str = "noul"
     instructions: str
-    criteria: Optional[NoulCriteria] = None
-    labels: Optional[NoulLabels] = None
+    criteria: NoulCriteria | None = None
+    labels: NoulLabels | None = None
 
 
 Question = ChoiceQuestion | ScoreQuestion | NoulQuestion
 
 
 class SystemOneRequest(BaseModel):
-    model: Optional[str] = None  # Ignored — topology determines model
+    model: str | None = None  # Ignored — topology determines model
     state: Any  # string, dict, or list
-    questions: Dict[str, Question]
-    max_len: Optional[int] = None
-    head_max_len: Optional[int] = None
-    min_confidence: Optional[float] = None
+    questions: dict[str, Question]
+    max_len: int | None = None
+    head_max_len: int | None = None
+    min_confidence: float | None = None
 
 
 class ChoiceAnswer(BaseModel):
     type: str = "choice"
     choice: str
-    probabilities: Dict[str, float]
+    probabilities: dict[str, float]
     confidence: float
 
 
 class ScoreAnswer(BaseModel):
     type: str = "score"
     score: float
-    probabilities: Dict[int, float]
+    probabilities: dict[int, float]
     confidence: float
-    legend: Dict[int, str]
+    legend: dict[int, str]
 
 
 class NoulAnswer(BaseModel):
@@ -98,9 +99,9 @@ Answer = ChoiceAnswer | ScoreAnswer | NoulAnswer
 
 class SystemOneResponse(BaseModel):
     model: str
-    answers: Dict[str, Answer]
-    usage: Dict[str, int]
-    routing: Optional[Dict[str, Any]] = None
+    answers: dict[str, Answer]
+    usage: dict[str, int]
+    routing: dict[str, Any] | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -110,10 +111,10 @@ class SystemOneResponse(BaseModel):
 _log = logging.getLogger("maestro.system1_serve")
 
 # Global orchestrator (initialized at startup)
-_orchestrator: Optional[Orchestrator] = None
+_orchestrator: Orchestrator | None = None
 
 
-def _require_auth(api_key: Optional[str], authorization: Optional[str]) -> None:
+def _require_auth(api_key: str | None, authorization: str | None) -> None:
     if not api_key:
         return
     if not authorization:
@@ -123,9 +124,6 @@ def _require_auth(api_key: Optional[str], authorization: Optional[str]) -> None:
     token = authorization[7:]
     if not hmac.compare_digest(token, api_key):
         raise HTTPException(status_code=403, detail="Invalid API key")
-
-
-import hmac
 
 
 @asynccontextmanager
@@ -171,7 +169,7 @@ async def list_models():
 @app.post("/v1/systemone", response_model=SystemOneResponse)
 async def system_one(
     request: SystemOneRequest,
-    authorization: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
 ):
     """Jev-compatible decision endpoint.
 
@@ -234,8 +232,8 @@ async def system_one(
 
     try:
         decision_data = json.loads(agent_result.output)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Decision agent returned invalid JSON")
+    except json.JSONDecodeError as err:
+        raise HTTPException(status_code=500, detail="Decision agent returned invalid JSON") from err
 
     # Build Jev-compatible response
     answers = {}

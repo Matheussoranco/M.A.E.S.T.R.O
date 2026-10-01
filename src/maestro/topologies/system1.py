@@ -10,7 +10,7 @@ This is the Jev / Laya / System One contract: state in, typed decisions out.
 
 from __future__ import annotations
 
-from maestro.agents.base import Agent, AgentResult
+from maestro.agents.base import Agent
 from maestro.swarm.context import RunContext
 from maestro.topologies.base import SwarmResult, Topology
 
@@ -37,7 +37,10 @@ class System1Topology(Topology):
             return SwarmResult(
                 task=task,
                 topology=self.name,
-                error=f"System 1 topology requires a decision-model agent (laya, laya-onnx, jev), got {decision_agent.kind}",
+                error=(
+                    "System 1 topology requires a decision-model agent "
+                    f"(laya, laya-onnx, jev), got {decision_agent.kind}"
+                ),
             )
 
         context.tracer.emit("system1_start", name=decision_agent.name, detail=decision_agent.role)
@@ -45,7 +48,9 @@ class System1Topology(Topology):
         # Run the decision agent
         result = decision_agent.run(task, context)
 
-        context.tracer.emit("system1_end", name=decision_agent.name, detail="ok" if result.ok() else "error")
+        context.tracer.emit(
+            "system1_end", name=decision_agent.name, detail="ok" if result.ok() else "error"
+        )
 
         # Return structured result
         if result.ok():

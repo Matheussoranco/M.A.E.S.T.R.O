@@ -539,7 +539,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ms.set_defaults(func=cmd_mcp_serve)
 
-    ss = sub.add_parser("system1-serve", help="expose a System 1 decision swarm over Jev-compatible HTTP API")
+    ss = sub.add_parser(
+        "system1-serve", help="expose a System 1 decision swarm over Jev-compatible HTTP API"
+    )
     ss.set_defaults(func=cmd_system1_serve)
 
     sub.add_parser("version", help="print version").set_defaults(func=cmd_version)
