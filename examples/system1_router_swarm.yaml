@@ -1,0 +1,73 @@
+# System 1 + System 2 swarm — Decision model routes to specialist LLM agents
+# Run: maestro run examples/system1_router_swarm.yaml "User says: My payment failed twice and I'm losing sales. Help!"
+
+name: system1-router-swarm
+description: System 1 decision model routes to specialist System 2 agents
+topology: supervisor
+topology_params:
+  supervisor: router
+
+providers:
+  local:
+    provider: ollama
+    model: llama3.1
+  laya:
+    # Provider for Laya agent (uses local model)
+    provider: ollama
+    model: llama3.1  # Not used by Laya agent but required by spec
+
+agents:
+  # System 1: Fast decision model for routing
+  - name: router
+    type: laya
+    role: router
+    description: Laya System 1 — routes incoming tasks to the right specialist
+    model: router
+    questions:
+      route_to:
+        type: choice
+        instructions: "Which specialist should handle this task?"
+        criteria:
+          coder: "code generation, debugging, refactoring"
+          researcher: "information gathering, analysis, synthesis"
+          analyst: "data analysis, metrics, reporting"
+          planner: "task decomposition, scheduling, strategy"
+          general: "general conversation, Q&A"
+      complexity:
+        type: score
+        instructions: "How complex is this task?"
+        criteria: ["trivial", "simple", "moderate", "complex", "very complex"]
+      requires_tools:
+        type: noul
+        instructions: "Does this task require external tools (search, code execution, API)?"
+
+  # System 2: Specialist agents (receive routed tasks from supervisor)
+  - name: coder
+    type: llm
+    provider: local
+    role: engineer
+    system_prompt: "You are a senior software engineer. Write clean, tested, maintainable code."
+
+  - name: researcher
+    type: llm
+    provider: local
+    role: researcher
+    system_prompt: "You are a research analyst. Gather, analyze, and synthesize information."
+
+  - name: analyst
+    type: llm
+    provider: local
+    role: analyst
+    system_prompt: "You are a data analyst. Analyze data, compute metrics, produce reports."
+
+  - name: planner
+    type: llm
+    provider: local
+    role: planner
+    system_prompt: "You are a strategic planner. Decompose tasks, create schedules, define strategy."
+
+  - name: general
+    type: llm
+    provider: local
+    role: assistant
+    system_prompt: "You are a helpful assistant. Answer questions and help with general tasks."

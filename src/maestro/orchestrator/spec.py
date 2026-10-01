@@ -163,9 +163,9 @@ class SwarmSpec:
                 _finite_number(problems, ag, "temperature", f"agent {name!r}")
                 if "tools" in ag and not isinstance(ag["tools"], list):
                     problems.append(f"agent {name!r} field 'tools' must be a list")
-            if atype in {"cli", "mcp", "isaac", "olivia"}:
+            if atype in {"laya", "laya-onnx", "jev"}:
                 _positive_number(problems, ag, "timeout", f"agent {name!r}")
-                if atype in {"cli", "mcp"}:
+            if atype in {"cli", "mcp", "isaac", "olivia"}:
                     command_key = "command" if atype == "cli" else "server_cmd"
                     if command_key in ag and not isinstance(ag[command_key], (str, list)):
                         problems.append(

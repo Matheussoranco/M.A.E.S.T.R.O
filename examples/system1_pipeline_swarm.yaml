@@ -1,0 +1,61 @@
+# Decision pipeline — System 1 routes to System 2, then System 1 evaluates
+# Run: maestro run examples/system1_pipeline_swarm.yaml "Implement a REST API for user authentication with JWT tokens."
+
+name: system1-pipeline
+description: "Sequential pipeline: classify -> execute -> evaluate"
+topology: sequential
+
+agents:
+  # Stage 1: System 1 classifier routes the task
+  - name: classifier
+    type: laya
+    role: router
+    description: Classify task type and route to specialist
+    model: router
+    questions:
+      task_type:
+        type: choice
+        instructions: "What type of task is this?"
+        criteria:
+          coding: "code generation, debugging, implementation"
+          research: "information gathering, analysis"
+          writing: "documentation, content creation"
+          planning: "architecture, design, strategy"
+          other: "general assistance"
+      complexity:
+        type: score
+        instructions: "How complex is this task?"
+        criteria: ["trivial", "simple", "moderate", "complex", "very_complex"]
+      needs_tools:
+        type: noul
+        instructions: "Does this require tools (search, code execution)?"
+
+  # Stage 2: System 2 specialist does the work (placeholder - uses echo backend)
+  - name: specialist
+    type: llm
+    provider: echo
+    role: executor
+    system_prompt: "You are a specialist. Execute the task based on the classification."
+
+  # Stage 3: System 1 evaluator checks the result
+  - name: evaluator
+    type: laya
+    role: quality-checker
+    description: Evaluate output quality and completeness
+    model: router
+    questions:
+      completeness:
+        type: noul
+        instructions: "Does the output fully address the original task?"
+      quality:
+        type: score
+        instructions: "Rate the quality of the solution."
+        criteria: ["poor", "acceptable", "good", "excellent"]
+      issues:
+        type: choice
+        instructions: "Are there any issues?"
+        criteria:
+          none: "no issues found"
+          minor: "small issues, easily fixable"
+          major: "significant problems requiring rework"
+          critical: "fundamental flaws"

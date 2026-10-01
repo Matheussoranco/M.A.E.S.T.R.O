@@ -13,6 +13,7 @@ maestro config [key]               show effective settings (redacted)
 maestro examples                   list the bundled example swarm specs
 maestro init [out.yaml]            scaffold a new swarm spec
 maestro mcp-serve                  expose MAESTRO itself over MCP (stdio)
+maestro system1-serve              expose a System 1 decision swarm over Jev-compatible HTTP API
 maestro version
 
 ``run`` and ``demo`` also take ``--stream`` (print tokens as they arrive) and
@@ -257,6 +258,13 @@ def cmd_mcp_serve(_args) -> int:
     # propagate the explicit opt-in so `mcp-serve` honors the same policy.
     cfg.settings.allow_stub_fallback = effective.allow_stub_fallback
     serve()
+    return 0
+
+
+def cmd_system1_serve(_args) -> int:
+    from maestro.system1_serve import run_server
+
+    run_server()
     return 0
 
 
@@ -530,6 +538,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="explicitly allow fallback to the deterministic 'echo' stub backend",
     )
     ms.set_defaults(func=cmd_mcp_serve)
+
+    ss = sub.add_parser("system1-serve", help="expose a System 1 decision swarm over Jev-compatible HTTP API")
+    ss.set_defaults(func=cmd_system1_serve)
+
     sub.add_parser("version", help="print version").set_defaults(func=cmd_version)
 
     pc = sub.add_parser("config", help="show effective settings (redacted)")

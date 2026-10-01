@@ -1,0 +1,14 @@
+# System 1 decision swarm using Laya presets
+# Run: maestro run examples/system1_preset_swarm.yaml "Customer email: Hi, my order hasn't arrived in 3 weeks. Tracking says delivered but I never got it. Very frustrated!"
+
+name: system1-preset-triage
+description: Laya System 1 with built-in triage preset
+topology: system1
+
+agents:
+  - name: triage
+    type: laya
+    role: decision-model
+    description: Laya Router with triage preset
+    model: router
+    preset: triage  # Options: triage, email, guard, moderation, router

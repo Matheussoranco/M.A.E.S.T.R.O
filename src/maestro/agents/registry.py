@@ -7,8 +7,16 @@ resolved against the swarm's named provider table.
 
 from __future__ import annotations
 
+from typing import Dict, Any
+
 from maestro.agents.base import Agent
 from maestro.agents.cli_agent import CLIAgent
+from maestro.agents.decision_agent import JevAgent, LayaAgent, LayaONNXAgent
+from maestro.agents.decision_agent import (
+    ChoiceQuestion,
+    ScoreQuestion,
+    NoulQuestion,
+)
 from maestro.agents.external import isaac_agent, olivia_agent
 from maestro.agents.llm_agent import LLMAgent
 from maestro.agents.mcp_agent import MCPAgent
@@ -17,7 +25,7 @@ from maestro.providers import ProviderSpec, resolve_client
 from maestro.tools import build_tools
 
 #: Agent ``type`` values understood by :func:`build_agent`.
-AGENT_TYPES = ("llm", "cli", "mcp", "isaac", "olivia")
+AGENT_TYPES = ("llm", "cli", "mcp", "isaac", "olivia", "laya", "laya-onnx", "jev")
 
 
 def _provider_spec(agent_spec: dict, providers: dict[str, ProviderSpec], settings) -> ProviderSpec:
@@ -39,6 +47,35 @@ def _provider_spec(agent_spec: dict, providers: dict[str, ProviderSpec], setting
     if not base.persona:
         base.persona = agent_spec.get("name", "")
     return base
+
+
+def _parse_questions(raw: object) -> Dict[str, Any]:
+    """Parse a questions dict from spec into Question dataclasses."""
+    if not raw or not isinstance(raw, dict):
+        return {}
+
+    result = {}
+    for qid, qspec in raw.items():
+        if not isinstance(qspec, dict):
+            continue
+        qtype = qspec.get("type")
+        if qtype == "choice":
+            result[qid] = ChoiceQuestion(
+                instructions=qspec.get("instructions", ""),
+                criteria=qspec.get("criteria", {}),
+            )
+        elif qtype == "score":
+            result[qid] = ScoreQuestion(
+                instructions=qspec.get("instructions", ""),
+                criteria=qspec.get("criteria", []),
+            )
+        elif qtype == "noul":
+            result[qid] = NoulQuestion(
+                instructions=qspec.get("instructions", ""),
+                criteria=qspec.get("criteria"),
+                labels=qspec.get("labels"),
+            )
+    return result
 
 
 def build_agent(
@@ -131,6 +168,48 @@ def build_agent(
             timeout=spec.get("timeout", 600.0),
             cwd=spec.get("cwd"),
             settings=settings,
+        )
+
+    if atype == "laya":
+        return LayaAgent(
+            name=name,
+            role=role or "decision-model",
+            description=description,
+            default_questions=_parse_questions(spec.get("questions")),
+            model=spec.get("model", "router"),
+            device=spec.get("device"),
+            preload=spec.get("preload", False),
+            max_loaded=spec.get("max_loaded", 2),
+            lang_guess=spec.get("lang_guess"),
+            default_model=spec.get("default_model", "english"),
+            timeout=spec.get("timeout", 30.0),
+            preset=spec.get("preset"),
+        )
+
+    if atype == "laya-onnx":
+        return LayaONNXAgent(
+            name=name,
+            role=role or "decision-model",
+            description=description,
+            default_questions=_parse_questions(spec.get("questions")),
+            model_id=spec.get("model_id", "convaiinnovations/laya"),
+            onnx_path=spec.get("onnx_path", "laya.onnx"),
+            token=spec.get("token"),
+            subfolder=spec.get("subfolder"),
+            revision=spec.get("revision"),
+            timeout=spec.get("timeout", 30.0),
+        )
+
+    if atype == "jev":
+        return JevAgent(
+            name=name,
+            role=role or "decision-model",
+            description=description,
+            default_questions=_parse_questions(spec.get("questions")),
+            model=spec.get("model", "jev-latest"),
+            api_key=spec.get("api_key"),
+            base_url=spec.get("base_url", "https://api.typesafe.ai"),
+            timeout=spec.get("timeout", 30.0),
         )
 
     raise ValueError(f"unknown agent type {atype!r}; choose one of {', '.join(AGENT_TYPES)}")

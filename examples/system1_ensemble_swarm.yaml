@@ -1,0 +1,75 @@
+# Decision ensemble — parallel evaluation with multiple System 1 models
+# Run: maestro run examples/system1_ensemble_swarm.yaml "Customer says: My order is late and I'm very frustrated. I want a refund or I'm cancelling."
+
+name: system1-ensemble
+description: Parallel ensemble of decision models for robust triage
+topology: parallel
+topology_params:
+  max_workers: 3
+
+agents:
+  - name: laya-router
+    type: laya
+    role: decision-model
+    description: Laya Router — auto-selects checkpoint
+    model: router
+    questions:
+      department:
+        type: choice
+        instructions: "Which department should handle this?"
+        criteria:
+          billing: "payments, refunds, invoices"
+          support: "product help, bugs"
+          sales: "new purchases"
+          other: "everything else"
+      urgency:
+        type: score
+        instructions: "How urgent?"
+        criteria: ["low", "medium", "high", "critical"]
+      churn_risk:
+        type: noul
+        instructions: "Will they cancel?"
+
+  - name: jev-api
+    type: jev
+    role: decision-model
+    description: Jev hosted API
+    model: jev-latest
+    questions:
+      department:
+        type: choice
+        instructions: "Which department should handle this?"
+        criteria:
+          billing: "payments, refunds, invoices"
+          support: "product help, bugs"
+          sales: "new purchases"
+          other: "everything else"
+      urgency:
+        type: score
+        instructions: "How urgent?"
+        criteria: ["low", "medium", "high", "critical"]
+      churn_risk:
+        type: noul
+        instructions: "Will they cancel?"
+
+  - name: laya-typed
+    type: laya
+    role: decision-model
+    description: Laya Typed Decisions (fine-tuned)
+    model: typed-decisions
+    questions:
+      department:
+        type: choice
+        instructions: "Which department should handle this?"
+        criteria:
+          billing: "payments, refunds, invoices"
+          support: "product help, bugs"
+          sales: "new purchases"
+          other: "everything else"
+      urgency:
+        type: score
+        instructions: "How urgent?"
+        criteria: ["low", "medium", "high", "critical"]
+      churn_risk:
+        type: noul
+        instructions: "Will they cancel?"

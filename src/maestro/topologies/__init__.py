@@ -8,6 +8,7 @@ from maestro.topologies.parallel import ParallelTopology
 from maestro.topologies.router import RouterTopology
 from maestro.topologies.sequential import SequentialTopology
 from maestro.topologies.supervisor import SupervisorTopology
+from maestro.topologies.system1 import System1Topology
 
 TOPOLOGIES: dict[str, type[Topology]] = {
     "sequential": SequentialTopology,
@@ -15,6 +16,7 @@ TOPOLOGIES: dict[str, type[Topology]] = {
     "supervisor": SupervisorTopology,
     "debate": DebateTopology,
     "router": RouterTopology,
+    "system1": System1Topology,
 }
 
 

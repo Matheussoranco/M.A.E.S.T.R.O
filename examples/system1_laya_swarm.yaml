@@ -1,0 +1,34 @@
+# System 1 decision swarm — Laya (local PyTorch)
+# Run: maestro run examples/system1_laya_swarm.yaml "Customer says: I was charged twice for my subscription. Please refund one charge today or I'll cancel."
+
+name: system1-laya-triage
+description: Laya System 1 decision model for customer support triage
+topology: system1
+
+agents:
+  - name: triage
+    type: laya
+    role: decision-model
+    description: Laya Router — automatic checkpoint selection (english/multilingual/typed-decisions)
+    model: router  # "router", "english", "multilingual", "typed-decisions"
+    preload: false
+    max_loaded: 2
+    questions:
+      department:
+        type: choice
+        instructions: "Which department should handle this request?"
+        criteria:
+          billing: "invoices, payments, refunds"
+          technical: "bugs, outages, system errors"
+          sales: "pricing, new contracts"
+          other: "everything else"
+      urgency:
+        type: score
+        instructions: "How urgent is this request?"
+        criteria: ["not urgent", "soon", "critical deadline or blocking issue"]
+      churn_risk:
+        type: noul
+        instructions: "Does the user threaten to cancel or leave?"
+      refund_requested:
+        type: noul
+        instructions: "Does the user explicitly request a refund?"
