@@ -33,6 +33,8 @@ class Swarm:
         trace: bool = True,
         on_token: Callable[[str, str], None] | None = None,
         stream: bool | None = None,
+        *,
+        context: RunContext | None = None,
     ) -> SwarmResult:
         """Conduct the swarm over *task*.
 
@@ -42,12 +44,16 @@ class Swarm:
         Streaming is enabled implicitly by passing a sink, or explicitly with
         *stream* (useful to exercise the path with no consumer).
         """
-        context = RunContext(
-            task=task,
-            tracer=Tracer(enabled=trace),
-            stream=bool(on_token) if stream is None else stream,
-            on_token=on_token,
-        )
+        # A supplied per-run context carries decision questions and its own tracer/streaming.
+        if context is None:
+            context = RunContext(
+                task=task,
+                tracer=Tracer(enabled=trace),
+                stream=bool(on_token) if stream is None else stream,
+                on_token=on_token,
+            )
+        else:
+            context.task = task
         context.tracer.emit("swarm_start", name=self.name, detail=self.topology.name)
         context.post("user", task, role="user")
         result = self.topology.run(task, self.agents, context)

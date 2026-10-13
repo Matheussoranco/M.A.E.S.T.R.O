@@ -252,7 +252,7 @@ not expose its stdio process to untrusted callers.
 
 ## Examples
 
-Eight bundled specs, covering every topology (`maestro examples` lists them):
+Fifteen bundled specs, covering every topology (`maestro examples` lists them):
 
 | Spec | Shows |
 |---|---|

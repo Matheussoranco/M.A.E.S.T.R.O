@@ -5,10 +5,10 @@ This server implements the TypeSafe Jev wire protocol, allowing any Jev client
 instance running a System 1 swarm.
 
 Configuration via environment variables:
-- MAESTRO_SYSTEM1_HOST: bind address (default 0.0.0.0)
+- MAESTRO_SYSTEM1_HOST: bind address (default 127.0.0.1)
 - MAESTRO_SYSTEM1_PORT: bind port (default 8001)
 - MAESTRO_SYSTEM1_SWARM: path to swarm spec (YAML/JSON) with a system1 topology
-- MAESTRO_SYSTEM1_API_KEY: if set, require Authorization: Bearer <key>
+- MAESTRO_SYSTEM1_API_KEY: required; accepts Authorization: Bearer <key>
 - MAESTRO_SYSTEM1_LOG_LEVEL: uvicorn log level (default info)
 """
 
@@ -115,8 +115,8 @@ _orchestrator: Orchestrator | None = None
 
 
 def _require_auth(api_key: str | None, authorization: str | None) -> None:
-    if not api_key:
-        return
+    if not api_key or not api_key.strip():
+        raise HTTPException(status_code=503, detail="Inference authentication is not configured")
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
     if not authorization.startswith("Bearer "):
@@ -129,6 +129,8 @@ def _require_auth(api_key: str | None, authorization: str | None) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _orchestrator
+    if not os.environ.get("MAESTRO_SYSTEM1_API_KEY", "").strip():
+        raise RuntimeError("MAESTRO_SYSTEM1_API_KEY must be configured before serving")
     swarm_path = os.environ.get("MAESTRO_SYSTEM1_SWARM")
     if not swarm_path:
         raise RuntimeError("MAESTRO_SYSTEM1_SWARM environment variable must be set")
@@ -209,16 +211,14 @@ async def system_one(
             questions[qid] = qdict
 
     # Run via orchestrator with questions in metadata
+    task = json.dumps(state, ensure_ascii=False) if not isinstance(state, str) else state
     tracer = Tracer()
     context = RunContext(
-        swarm_name=_orchestrator.spec.name,
+        task=task,
         tracer=tracer,
         stream=False,
         scratch={"questions": questions},
     )
-
-    # State becomes the task
-    task = json.dumps(state, ensure_ascii=False) if not isinstance(state, str) else state
 
     result = _orchestrator.swarm.run(task, trace=True, on_token=None, stream=False, context=context)
 
@@ -273,7 +273,9 @@ def run_server():
     """Entry point for `maestro system1-serve` command."""
     import uvicorn
 
-    host = os.environ.get("MAESTRO_SYSTEM1_HOST", "0.0.0.0")
+    if not os.environ.get("MAESTRO_SYSTEM1_API_KEY", "").strip():
+        raise RuntimeError("MAESTRO_SYSTEM1_API_KEY must be configured before serving")
+    host = os.environ.get("MAESTRO_SYSTEM1_HOST", "127.0.0.1")
     port = int(os.environ.get("MAESTRO_SYSTEM1_PORT", "8001"))
     log_level = os.environ.get("MAESTRO_SYSTEM1_LOG_LEVEL", "info")
 
