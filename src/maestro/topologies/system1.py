@@ -52,7 +52,6 @@ class System1Topology(Topology):
             "system1_end", name=decision_agent.name, detail="ok" if result.ok() else "error"
         )
 
-        # Return structured result
         if result.ok():
             return SwarmResult(
                 task=task,
@@ -61,12 +60,11 @@ class System1Topology(Topology):
                 per_agent=[result],
                 tracer=context.tracer,
             )
-        else:
-            return SwarmResult(
-                task=task,
-                final="",
-                topology=self.name,
-                per_agent=[result],
-                tracer=context.tracer,
-                error=result.error,
-            )
+        return SwarmResult(
+            task=task,
+            final="",
+            topology=self.name,
+            per_agent=[result],
+            tracer=context.tracer,
+            error=result.error,
+        )

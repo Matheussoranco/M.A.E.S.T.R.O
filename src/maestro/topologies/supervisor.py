@@ -102,13 +102,13 @@ class SupervisorTopology(Topology):
                 try:
                     results.append(fut.result(timeout=timeout))
                     completed_contexts.append(worker_context)
-                except concurrent.futures.TimeoutError as exc:
+                except concurrent.futures.TimeoutError:
                     fut.cancel()
                     results.append(
                         AgentResult(
                             name=worker.name,
                             role=getattr(worker, "role", ""),
-                            error=f"worker timed out after {timeout}s: {exc}",
+                            error=f"worker timed out after {timeout:.1f}s",
                         )
                     )
                 except Exception as exc:  # never let one worker kill the swarm

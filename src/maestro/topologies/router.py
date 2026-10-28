@@ -54,7 +54,8 @@ class RouterTopology(Topology):
         return None
 
     def _route_via_keywords(self, task: str, candidates: list[Agent]) -> Agent:
-        words = {w.lower() for w in task.split() if len(w) > 3}
+        words = {w.strip(".,!?;:()[]\"'`").lower() for w in task.split()}
+        words = {w for w in words if len(w) > 3}
         best, best_score = candidates[0], -1
         for c in candidates:
             profile = f"{c.name} {c.role} {c.description}".lower()

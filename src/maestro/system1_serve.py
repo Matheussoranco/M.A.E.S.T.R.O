@@ -24,6 +24,7 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
+from maestro import __version__
 from maestro.orchestrator import Orchestrator
 from maestro.swarm.context import RunContext
 from maestro.telemetry.tracer import Tracer
@@ -143,7 +144,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MAESTRO System 1 Decision API",
     description="Jev-compatible /v1/systemone endpoint for MAESTRO decision-model swarms",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -169,16 +170,15 @@ async def list_models():
 
 
 @app.post("/v1/systemone", response_model=SystemOneResponse)
-async def system_one(
+def system_one(
     request: SystemOneRequest,
     authorization: str | None = Header(None),
 ):
     """Jev-compatible decision endpoint.
 
     Accepts a state and typed questions, returns calibrated probabilities.
+    Sync on purpose: the blocking swarm run must not stall the event loop.
     """
-    global _orchestrator
-
     if _orchestrator is None:
         raise HTTPException(status_code=503, detail="Swarm not loaded")
 
@@ -257,7 +257,7 @@ async def system_one(
         elif atype == "noul":
             answers[qid] = NoulAnswer(noul=ans.get("noul", 0.0))
 
-    usage = decision_data.get("usage", {"input_tokens": 0, "output_tokens": 0})
+    usage = decision_data.get("usage") or {}
     model = decision_data.get("model", "maestro-system1")
     routing = decision_data.get("routing")
 

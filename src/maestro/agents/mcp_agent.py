@@ -13,6 +13,7 @@ MCP client.  For heavy use prefer :class:`~maestro.agents.cli_agent.CLIAgent`.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import queue
@@ -21,6 +22,7 @@ import subprocess
 import threading
 import time
 
+from maestro import __version__
 from maestro.agents.base import Agent, AgentResult
 from maestro.agents.cli_agent import _filtered_env, split_command
 from maestro.swarm.context import RunContext
@@ -111,7 +113,7 @@ class MCPAgent(Agent):
                 {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {"name": "maestro", "version": "0.2.0"},
+                    "clientInfo": {"name": "maestro", "version": __version__},
                 },
             )
             self._await(reader, 1, deadline)
@@ -120,19 +122,19 @@ class MCPAgent(Agent):
             self._send(proc, 2, "tools/call", {"name": self.tool, "arguments": args})
             result = self._await(reader, 2, deadline)
         finally:
-            with _suppress():
+            with contextlib.suppress(Exception):
                 proc.stdin.close()
-            with _suppress():
+            with contextlib.suppress(Exception):
                 proc.terminate()
-            with _suppress():
+            with contextlib.suppress(Exception):
                 proc.wait(timeout=1.0)
             if proc.poll() is None:
-                with _suppress():
+                with contextlib.suppress(Exception):
                     proc.kill()
-                with _suppress():
+                with contextlib.suppress(Exception):
                     proc.wait(timeout=1.0)
             reader.stop()
-            with _suppress():
+            with contextlib.suppress(Exception):
                 reader.join(timeout=1.0)
 
         content = (result or {}).get("content") or []
@@ -182,14 +184,6 @@ class MCPAgent(Agent):
 
 class _MCPError(RuntimeError):
     pass
-
-
-class _suppress:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return True
 
 
 class _LineReader(threading.Thread):

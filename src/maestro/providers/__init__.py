@@ -10,6 +10,7 @@ hard failure — so a swarm always *runs*, even with no keys.
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass, field
 
 from maestro.config.settings import settings as default_settings
@@ -113,9 +114,11 @@ def get_client(spec: ProviderSpec, settings=None) -> LLMClient:
 
 def resolve_client(spec: ProviderSpec, settings=None) -> LLMClient:
     """Build the client, degrading to ``echo`` when unavailable (if permitted)."""
-    import sys
-
     s = settings or default_settings
+    # Normalized the same way get_client() does, so "Null"/"NULL"/"null" are
+    # recognized alike — otherwise a differently-cased "null" (which must stay
+    # unavailable to force symbolic fallback) would be silently upgraded to a
+    # working EchoClient here.
     provider = _normalize_provider(spec.provider)
     client = get_client(spec, s)
     if client.available:
@@ -133,11 +136,6 @@ def resolve_client(spec: ProviderSpec, settings=None) -> LLMClient:
                 EchoClient(model=f"echo:{spec.provider}", persona=spec.persona),
             )
         return client
-    # Normalize the same way get_client() does, so "Null"/"NULL"/"null" are
-    # recognized alike — otherwise a differently-cased "null" (which must stay
-    # unavailable to force symbolic fallback) would be silently upgraded to a
-    # working EchoClient here.
-    provider = _normalize_provider(spec.provider)
     if s.allow_stub_fallback and provider not in ("echo", "null"):
         logger.warning(
             "STUB fallback active: provider %r unavailable — "

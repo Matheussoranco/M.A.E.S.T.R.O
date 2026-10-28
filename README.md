@@ -1,11 +1,11 @@
 # M.A.E.S.T.R.O.
 
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](LICENSE)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](LICENSE)
 
 **Multi-Agent Ensemble Swarm Task-Routing Orchestrator** — a provider-agnostic
 orchestrator that *instantiates and conducts agent swarms*, in the spirit of the
 multi-agent systems from MiniMax and Kimi, and is source-available for you to
-configure. It is licensed CC BY-NC-SA 4.0, including a noncommercial restriction.
+configure. It is licensed CC BY-NC 4.0, including a noncommercial restriction.
 
 Describe a swarm as plain data; MAESTRO brings it to life. Any agent may be
 backed by **any** LLM — Anthropic, OpenAI, any OpenAI-compatible gateway (Groq,
@@ -30,7 +30,7 @@ Two commitments make MAESTRO different from a hard-coded agent app:
 | **Provider-agnostic** | Mix a strong cloud "lead" with cheap local workers in the same swarm. Swap `anthropic` → `ollama` by editing one line of a spec. |
 | **Agent-agnostic** | A member is anything that takes a task and returns text: an LLM, a CLI, an MCP tool, or a whole other agent project. |
 | **Declarative** | Swarms are *data* (YAML/JSON/dict). The same runtime instantiates any swarm you can describe — that's the "instantiator". |
-| **Graceful degradation** | No key? Unreachable host? The swarm still runs on the deterministic `echo` backend so you can see its control-flow. |
+| **Graceful degradation** | No key? Unreachable host? With stub fallback opted in, the swarm still runs on the deterministic `echo` backend so you can see its control-flow. |
 
 ## Install
 
@@ -232,9 +232,9 @@ MCP mode (`type: isaac, mode: mcp`) drives their MCP servers instead of the CLI.
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | credentials (also `MAESTRO_*` prefixed) |
 | `MAESTRO_OLLAMA_BASE_URL` | local Ollama endpoint (default `http://localhost:11434`) |
 | `MAESTRO_OPENAI_BASE_URL` | point OpenAI-compatible clients at any gateway |
-| `MAESTRO_ALLOW_STUB` | fall back to `echo` when a backend is unavailable (default on) |
+| `MAESTRO_ALLOW_STUB` | fall back to `echo` when a backend is unavailable (default off; on in demo/test) |
 | `MAESTRO_ISAAC_CMD` / `MAESTRO_OLIVIA_CMD` | how to launch the sibling agents |
-| `MAESTRO_MCP_SPEC_ROOTS` | `os.pathsep`-separated directories allowed to MCP `run_spec`/`validate` (defaults to the server working directory) |
+| `MAESTRO_MCP_SPEC_ROOTS` | `os.pathsep`-separated directories allowed to MCP `run_spec`/`validate` (defaults to `./specs` under the server working directory) |
 
 ## MAESTRO as an MCP server
 
@@ -294,24 +294,26 @@ src/maestro/
 
 ## License
 
-[**CC BY-NC-SA 4.0**](https://creativecommons.org/licenses/by-nc-sa/4.0/) — see [LICENSE](LICENSE).
+[**CC BY-NC 4.0**](https://creativecommons.org/licenses/by-nc/4.0/) — see [LICENSE](LICENSE).
 
 Copyright © 2026 Matheus Soranzo <matheussoranco@gmail.com>
-`SPDX-License-Identifier: CC-BY-NC-SA-4.0`
+`SPDX-License-Identifier: CC-BY-NC-4.0`
 Part of the I.S.A.A.C. / O.L.I.V.I.A. agent ecosystem.
 
 You may use, study, modify and share M.A.E.S.T.R.O. for any noncommercial
-purpose, on three conditions:
+purpose, on two conditions:
 
 - **NonCommercial** — not primarily for or directed towards commercial advantage
   or monetary compensation (§1(k)).
-- **ShareAlike** — anything you share onward, including modified versions, must
-  carry these same terms. This is a copyleft licence (§3(b)).
 - **Attribution** — keep the copyright notice, the licence reference and the
   warranty disclaimer, say if you changed it, and link back where practicable (§3(a)).
+
+There is no ShareAlike requirement: derivatives you share do not have to carry
+the same terms.
 
 Commercial use requires separate written permission from the copyright holder.
 Note the licence grants no patent or trademark rights (§2(b)(2)).
 
-This project was previously MIT-licensed; anyone who received it under those
-terms keeps their MIT rights to that version.
+Earlier versions were released under CC BY-NC-SA 4.0 (until 2026-09-16) and MIT
+before that; anyone who received those versions keeps their rights under those
+terms.

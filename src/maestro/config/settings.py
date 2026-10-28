@@ -146,11 +146,15 @@ class Settings:
             "default_model": self.default_model or "(provider default)",
             "anthropic_api_key": bool(self.anthropic_api_key),
             "openai_api_key": bool(self.openai_api_key),
-            "ollama_base_url": self.ollama_base_url,
+            "anthropic_base_url": self.anthropic_base_url,
             "openai_base_url": self.openai_base_url,
+            "ollama_base_url": self.ollama_base_url,
+            "llamacpp_base_url": self.llamacpp_base_url,
             "allow_stub_fallback": self.allow_stub_fallback,
             "request_timeout": self.request_timeout,
             "max_tokens": self.max_tokens,
+            "isaac_cmd": self.isaac_cmd,
+            "olivia_cmd": self.olivia_cmd,
         }
 
 

@@ -8,6 +8,8 @@ and self-consistency.
 
 from __future__ import annotations
 
+import concurrent.futures
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from maestro.agents.base import Agent, AgentResult
@@ -36,21 +38,54 @@ class ParallelTopology(Topology):
         # reproducible while the aggregator still sees the complete transcript.
         initial = context.blackboard.snapshot()
         message_offset = len(initial.messages())
-        worker_contexts = []
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {}
+        completed_contexts = []
+        pool = ThreadPoolExecutor(max_workers=max_workers)
+        try:
+            jobs = []
             for w in workers:
                 worker_context = context.child(blackboard=initial.snapshot())
-                worker_contexts.append(worker_context)
-                futures[pool.submit(w.run, task, worker_context)] = worker_context
-            for fut in futures:
-                results.append(fut.result())
+                timeout = float(self.params.get("worker_timeout", getattr(w, "timeout", 300.0)))
+                jobs.append(
+                    (
+                        w,
+                        worker_context,
+                        pool.submit(w.run, task, worker_context),
+                        time.monotonic() + timeout,
+                    )
+                )
+            for worker, worker_context, fut, deadline in jobs:
+                # Bound each worker by its own timeout so one hung backend
+                # cannot stall the whole swarm; exceptions become error results.
+                remaining = max(0.0, deadline - time.monotonic())
+                try:
+                    results.append(fut.result(timeout=remaining))
+                    completed_contexts.append(worker_context)
+                except concurrent.futures.TimeoutError:
+                    fut.cancel()
+                    results.append(
+                        AgentResult(
+                            name=worker.name,
+                            role=getattr(worker, "role", ""),
+                            error=f"worker timed out after {remaining:.1f}s",
+                        )
+                    )
+                except Exception as exc:  # never let one worker kill the swarm
+                    results.append(
+                        AgentResult(
+                            name=worker.name,
+                            role=getattr(worker, "role", ""),
+                            error=f"worker raised {type(exc).__name__}: {exc}",
+                        )
+                    )
+        finally:
+            # __exit__ waits for running workers, defeating result(timeout=...).
+            pool.shutdown(wait=False, cancel_futures=True)
+        for worker_context in completed_contexts:
+            context.blackboard.merge_from(worker_context.blackboard, message_offset)
 
         # Preserve declaration order for deterministic output.
         order = {w.name: i for i, w in enumerate(workers)}
         results.sort(key=lambda r: order.get(r.name, 0))
-        for worker_context in worker_contexts:
-            context.blackboard.merge_from(worker_context.blackboard, message_offset)
 
         if aggregator is not None:
             agg_task = self.params.get(

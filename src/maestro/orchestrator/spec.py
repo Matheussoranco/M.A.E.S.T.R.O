@@ -31,7 +31,10 @@ from dataclasses import dataclass, field
 
 from maestro.agents.registry import AGENT_TYPES
 from maestro.providers import PROVIDERS, ProviderSpec
+from maestro.tools.builtin import builtin_tools
 from maestro.topologies import TOPOLOGIES
+
+_TOOL_NAMES = frozenset(builtin_tools())
 
 # Keys that reference an agent by name inside topology_params.
 _AGENT_REF_PARAMS = ("supervisor", "aggregator", "judge", "router")
@@ -86,13 +89,7 @@ class SwarmSpec:
         _raw_topology = data.get("topology", "sequential")
         # isinstance FIRST, .lower() second — calling .lower() on a non-str
         # (e.g. null/int from a hand-edited YAML) must not raise AttributeError.
-        _topology = (
-            _raw_topology.lower()
-            if isinstance(_raw_topology, str) and _raw_topology
-            else "sequential"
-            if not isinstance(_raw_topology, str)
-            else _raw_topology.lower()
-        )
+        _topology = _raw_topology.lower() if isinstance(_raw_topology, str) else "sequential"
         return cls(
             name=data.get("name", "swarm"),
             description=data.get("description", ""),
@@ -155,7 +152,16 @@ class SwarmSpec:
             if atype == "mcp" and not (ag.get("server_cmd") and ag.get("tool")):
                 problems.append(f"mcp agent {name!r} needs 'server_cmd' and 'tool'")
             ref = ag.get("provider")
-            if isinstance(ref, str) and ref and ref not in self.providers and ref not in PROVIDERS:
+            if isinstance(ref, dict):
+                unknown = sorted(k for k in ref if k not in ProviderSpec.__dataclass_fields__)
+                if unknown:
+                    problems.append(
+                        f"agent {name!r} provider has unknown field(s): {', '.join(unknown)} "
+                        f"(allowed: {', '.join(sorted(ProviderSpec.__dataclass_fields__))})"
+                    )
+            elif (
+                isinstance(ref, str) and ref and ref not in self.providers and ref not in PROVIDERS
+            ):
                 problems.append(f"agent {name!r} references unknown provider {ref!r}")
             if atype == "llm":
                 _positive_int(problems, ag, "max_tokens", f"agent {name!r}")
@@ -163,6 +169,13 @@ class SwarmSpec:
                 _finite_number(problems, ag, "temperature", f"agent {name!r}")
                 if "tools" in ag and not isinstance(ag["tools"], list):
                     problems.append(f"agent {name!r} field 'tools' must be a list")
+                elif isinstance(ag.get("tools"), list):
+                    for tool_name in ag["tools"]:
+                        if tool_name not in _TOOL_NAMES:
+                            problems.append(
+                                f"agent {name!r} references unknown tool {tool_name!r} "
+                                f"(available: {', '.join(sorted(_TOOL_NAMES))})"
+                            )
             if atype in {"laya", "laya-onnx", "jev"}:
                 _positive_number(problems, ag, "timeout", f"agent {name!r}")
             if atype in {"cli", "mcp", "isaac", "olivia"}:
@@ -174,6 +187,7 @@ class SwarmSpec:
 
         if self.topology in {"parallel", "supervisor"}:
             _positive_int(problems, self.topology_params, "max_workers", "topology_params")
+            _positive_number(problems, self.topology_params, "worker_timeout", "topology_params")
         if self.topology == "debate":
             _positive_int(problems, self.topology_params, "rounds", "topology_params")
 

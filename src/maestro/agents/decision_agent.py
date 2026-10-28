@@ -14,11 +14,11 @@ from __future__ import annotations
 import json
 import os
 import warnings
-from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any
 
 from maestro.agents.base import Agent, AgentResult
+from maestro.providers._http import post_json
 from maestro.swarm.context import RunContext
 from maestro.telemetry.usage import Usage
 
@@ -131,7 +131,7 @@ class DecisionResult:
 # -----------------------------------------------------------------------------
 
 
-class DecisionAgent(Agent, ABC):
+class DecisionAgent(Agent):
     """Base class for System 1 decision-model agents.
 
     Decision agents don't generate text — they evaluate typed questions against
@@ -168,6 +168,57 @@ class DecisionAgent(Agent, ABC):
         return task
 
 
+def _question_payloads(questions: dict[str, Question]) -> dict[str, dict]:
+    """Convert Question dataclasses into the shared Laya/Jev wire dicts."""
+    payloads: dict[str, dict] = {}
+    for qid, q in questions.items():
+        if isinstance(q, ChoiceQuestion):
+            payloads[qid] = {
+                "type": "choice",
+                "instructions": q.instructions,
+                "criteria": q.criteria,
+            }
+        elif isinstance(q, ScoreQuestion):
+            payloads[qid] = {
+                "type": "score",
+                "instructions": q.instructions,
+                "criteria": q.criteria,
+            }
+        elif isinstance(q, NoulQuestion):
+            qdict = {"type": "noul", "instructions": q.instructions}
+            if q.criteria:
+                qdict["criteria"] = q.criteria
+            if q.labels:
+                qdict["labels"] = q.labels
+            payloads[qid] = qdict
+    return payloads
+
+
+def _parse_answers(result: dict) -> dict[str, Answer]:
+    """Convert a Laya/Jev wire ``answers`` payload into typed Answers."""
+    answers: dict[str, Answer] = {}
+    for qid, ans in (result.get("answers") or {}).items():
+        atype = ans.get("type")
+        if atype == "choice":
+            answers[qid] = ChoiceAnswer(
+                choice=ans["choice"],
+                probabilities=ans.get("probabilities", {}),
+                confidence=ans.get("confidence", 0.0),
+            )
+        elif atype == "score":
+            probs = {int(k): v for k, v in ans.get("probabilities", {}).items()}
+            legend = {int(k): v for k, v in ans.get("legend", {}).items()}
+            answers[qid] = ScoreAnswer(
+                score=ans.get("score", 0.0),
+                probabilities=probs,
+                confidence=ans.get("confidence", 0.0),
+                legend=legend,
+            )
+        elif atype == "noul":
+            answers[qid] = NoulAnswer(noul=ans.get("noul", 0.0))
+    return answers
+
+
 # -----------------------------------------------------------------------------
 # Laya Agent (local PyTorch)
 # -----------------------------------------------------------------------------
@@ -199,8 +250,6 @@ class LayaAgent(DecisionAgent):
     ) -> None:
         # Apply preset if specified
         if preset and not default_questions:
-            from .decision_agent import DECISION_PRESETS
-
             if preset in DECISION_PRESETS:
                 default_questions = DECISION_PRESETS[preset]()
             else:
@@ -217,7 +266,6 @@ class LayaAgent(DecisionAgent):
         self.lang_guess = lang_guess
         self.default_model = default_model
         self._router = None
-        self._agent = None
 
     @property
     def available(self) -> bool:
@@ -272,29 +320,7 @@ class LayaAgent(DecisionAgent):
                 ),
             )
 
-        # Convert our Question dataclasses to Laya's dict format
-        laya_questions = {}
-        for qid, q in questions.items():
-            if isinstance(q, ChoiceQuestion):
-                laya_questions[qid] = {
-                    "type": "choice",
-                    "instructions": q.instructions,
-                    "criteria": q.criteria,
-                }
-            elif isinstance(q, ScoreQuestion):
-                laya_questions[qid] = {
-                    "type": "score",
-                    "instructions": q.instructions,
-                    "criteria": q.criteria,
-                }
-            elif isinstance(q, NoulQuestion):
-                qdict = {"type": "noul", "instructions": q.instructions}
-                if q.criteria:
-                    qdict["criteria"] = q.criteria
-                if q.labels:
-                    qdict["labels"] = q.labels
-                laya_questions[qid] = qdict
-
+        laya_questions = _question_payloads(questions)
         router = self._get_router()
 
         try:
@@ -307,7 +333,12 @@ class LayaAgent(DecisionAgent):
             result = router.predict(state, laya_questions, **predict_kwargs)
 
             # Parse Laya result into our DecisionResult
-            decision_result = self._parse_laya_result(result)
+            decision_result = DecisionResult(
+                answers=_parse_answers(result),
+                routing=result.get("routing"),
+                usage=result.get("usage", {}),
+                model=result.get("model", ""),
+            )
 
             # Build output as JSON for blackboard
             output = decision_result.to_json()
@@ -344,36 +375,6 @@ class LayaAgent(DecisionAgent):
                     error=f"Laya prediction failed: {exc}",
                 ),
             )
-
-    def _parse_laya_result(self, result: dict) -> DecisionResult:
-        """Convert Laya's raw dict result to DecisionResult."""
-        answers = {}
-        for qid, ans in result.get("answers", {}).items():
-            atype = ans.get("type")
-            if atype == "choice":
-                answers[qid] = ChoiceAnswer(
-                    choice=ans["choice"],
-                    probabilities=ans.get("probabilities", {}),
-                    confidence=ans.get("confidence", 0.0),
-                )
-            elif atype == "score":
-                probs = {int(k): v for k, v in ans.get("probabilities", {}).items()}
-                legend = {int(k): v for k, v in ans.get("legend", {}).items()}
-                answers[qid] = ScoreAnswer(
-                    score=ans.get("score", 0.0),
-                    probabilities=probs,
-                    confidence=ans.get("confidence", 0.0),
-                    legend=legend,
-                )
-            elif atype == "noul":
-                answers[qid] = NoulAnswer(noul=ans.get("noul", 0.0))
-
-        return DecisionResult(
-            answers=answers,
-            routing=result.get("routing"),
-            usage=result.get("usage", {}),
-            model=result.get("model", ""),
-        )
 
 
 # -----------------------------------------------------------------------------
@@ -464,29 +465,7 @@ class LayaONNXAgent(DecisionAgent):
                 ),
             )
 
-        # Convert to Laya ONNX format
-        laya_questions = {}
-        for qid, q in questions.items():
-            if isinstance(q, ChoiceQuestion):
-                laya_questions[qid] = {
-                    "type": "choice",
-                    "instructions": q.instructions,
-                    "criteria": q.criteria,
-                }
-            elif isinstance(q, ScoreQuestion):
-                laya_questions[qid] = {
-                    "type": "score",
-                    "instructions": q.instructions,
-                    "criteria": q.criteria,
-                }
-            elif isinstance(q, NoulQuestion):
-                qdict = {"type": "noul", "instructions": q.instructions}
-                if q.criteria:
-                    qdict["criteria"] = q.criteria
-                if q.labels:
-                    qdict["labels"] = q.labels
-                laya_questions[qid] = qdict
-
+        laya_questions = _question_payloads(questions)
         agent = self._get_agent()
 
         try:
@@ -494,7 +473,11 @@ class LayaONNXAgent(DecisionAgent):
             result = agent.system_one(state, laya_questions)
 
             # Parse result
-            decision_result = self._parse_onnx_result(result)
+            decision_result = DecisionResult(
+                answers=_parse_answers(result),
+                usage=result.get("usage", {}),
+                model=result.get("model", ""),
+            )
 
             output = decision_result.to_json()
 
@@ -529,35 +512,6 @@ class LayaONNXAgent(DecisionAgent):
                     error=f"Laya ONNX prediction failed: {exc}",
                 ),
             )
-
-    def _parse_onnx_result(self, result: dict) -> DecisionResult:
-        """ONNXAgent.system_one returns Jev-compatible format."""
-        answers = {}
-        for qid, ans in result.get("answers", {}).items():
-            atype = ans.get("type")
-            if atype == "choice":
-                answers[qid] = ChoiceAnswer(
-                    choice=ans["choice"],
-                    probabilities=ans.get("probabilities", {}),
-                    confidence=ans.get("confidence", 0.0),
-                )
-            elif atype == "score":
-                probs = {int(k): v for k, v in ans.get("probabilities", {}).items()}
-                legend = {int(k): v for k, v in ans.get("legend", {}).items()}
-                answers[qid] = ScoreAnswer(
-                    score=ans.get("score", 0.0),
-                    probabilities=probs,
-                    confidence=ans.get("confidence", 0.0),
-                    legend=legend,
-                )
-            elif atype == "noul":
-                answers[qid] = NoulAnswer(noul=ans.get("noul", 0.0))
-
-        return DecisionResult(
-            answers=answers,
-            usage=result.get("usage", {}),
-            model=result.get("model", ""),
-        )
 
 
 # -----------------------------------------------------------------------------
@@ -641,34 +595,21 @@ class JevAgent(DecisionAgent):
                 ),
             )
 
-        # Convert to Jev SDK format
-        jev_questions = {}
-        for qid, q in questions.items():
-            if isinstance(q, ChoiceQuestion):
-                from typesafe_sdk import Choice
-
-                jev_questions[qid] = Choice(instructions=q.instructions, criteria=q.criteria)
-            elif isinstance(q, ScoreQuestion):
-                from typesafe_sdk import Score
-
-                jev_questions[qid] = Score(instructions=q.instructions, criteria=q.criteria)
-            elif isinstance(q, NoulQuestion):
-                from typesafe_sdk import Noul
-
-                jev_questions[qid] = Noul(
-                    instructions=q.instructions, criteria=q.criteria, labels=q.labels
-                )
-
         client = self._get_client()
 
         try:
             if client == "raw_http":
-                result = self._call_raw_http(state, jev_questions)
+                result = self._call_raw_http(state, _question_payloads(questions))
+                decision_result = DecisionResult(
+                    answers=_parse_answers(result),
+                    usage=result.get("usage", {}),
+                    model=result.get("model", self.model),
+                )
             else:
-                result = client.system_one(state=state, questions=jev_questions, model=self.model)
-
-            # Parse Jev result
-            decision_result = self._parse_jev_result(result)
+                result = client.system_one(
+                    state=state, questions=self._sdk_questions(questions), model=self.model
+                )
+                decision_result = self._parse_jev_result(result)
 
             output = decision_result.to_json()
 
@@ -704,39 +645,44 @@ class JevAgent(DecisionAgent):
                 ),
             )
 
+    def _sdk_questions(self, questions: dict[str, Question]) -> dict:
+        """Convert Question dataclasses into typesafe-sdk query objects."""
+        from typesafe_sdk import Choice, Noul, Score
+
+        jev_questions = {}
+        for qid, q in questions.items():
+            if isinstance(q, ChoiceQuestion):
+                jev_questions[qid] = Choice(instructions=q.instructions, criteria=q.criteria)
+            elif isinstance(q, ScoreQuestion):
+                jev_questions[qid] = Score(instructions=q.instructions, criteria=q.criteria)
+            elif isinstance(q, NoulQuestion):
+                jev_questions[qid] = Noul(
+                    instructions=q.instructions, criteria=q.criteria, labels=q.labels
+                )
+        return jev_questions
+
     def _call_raw_http(self, state: Any, questions: dict) -> dict:
         """Fallback raw HTTP call when typesafe-sdk not available."""
-        import urllib.request
-
-        # Convert Jev SDK objects to plain dicts
-        qdict = {}
-        for qid, q in questions.items():
-            if hasattr(q, "__dict__"):
-                qdict[qid] = q.__dict__
-            else:
-                qdict[qid] = q
-
         payload = {
             "model": self.model,
             "state": state if isinstance(state, str) else json.dumps(state, ensure_ascii=False),
-            "questions": qdict,
+            "questions": questions,
         }
-
-        req = urllib.request.Request(
+        res = post_json(
             f"{self.base_url}/v1/systemone",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
+            payload,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=self.timeout,
         )
-
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        if res.error:
+            raise RuntimeError(res.error)
+        data = res.json()
+        if data.get("_parse_error"):
+            raise RuntimeError(f"invalid JSON response: {data['_parse_error']}")
+        return data
 
     def _parse_jev_result(self, result: Any) -> DecisionResult:
-        """Parse Jev SDK response or raw HTTP response."""
+        """Parse a typesafe-sdk response object (or dict, for newer SDKs)."""
         # Handle both SDK response object and raw dict
         if hasattr(result, "answers"):
             answers_dict = result.answers

@@ -262,9 +262,16 @@ def cmd_mcp_serve(_args) -> int:
 
 
 def cmd_system1_serve(_args) -> int:
-    from maestro.system1_serve import run_server
+    try:
+        from maestro.system1_serve import run_server
 
-    run_server()
+        run_server()
+    except ImportError as exc:
+        _print(
+            f"error: {exc} — the System 1 server needs the 'serve' extra: "
+            "pip install 'maestro-swarm[serve]'"
+        )
+        return 2
     return 0
 
 
