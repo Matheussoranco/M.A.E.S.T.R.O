@@ -23,7 +23,8 @@ class ParallelTopology(Topology):
     def run(self, task: str, agents: list[Agent], context: RunContext) -> SwarmResult:
         aggregator_name = self.params.get("aggregator")
         aggregator = next((a for a in agents if a.name == aggregator_name), None)
-        workers = self._worker_agents(agents, {aggregator_name} if aggregator else set())
+        excluded: set[str] = {aggregator_name} if aggregator_name else set()
+        workers = self._worker_agents(agents, excluded if aggregator else set())
 
         context.tracer.emit(
             "topology",

@@ -10,11 +10,12 @@ from __future__ import annotations
 import ast
 import datetime as _dt
 import operator as _op
+from collections.abc import Callable
 
 from maestro.tools.base import FunctionTool, Tool, ToolError
 
 # -- calculator (safe arithmetic via AST, no eval) ---------------------------
-_BINOPS = {
+_BINOPS: dict[type, Callable[[float, float], float]] = {
     ast.Add: _op.add,
     ast.Sub: _op.sub,
     ast.Mult: _op.mul,
@@ -23,7 +24,7 @@ _BINOPS = {
     ast.Mod: _op.mod,
     ast.Pow: _op.pow,
 }
-_UNARY = {ast.UAdd: _op.pos, ast.USub: _op.neg}
+_UNARY: dict[type, Callable[[float], float]] = {ast.UAdd: _op.pos, ast.USub: _op.neg}
 
 _MAX_NODES = 200
 _MAX_EXPR_LEN = 1000
@@ -98,12 +99,10 @@ def _safe_eval(expr: str) -> str:
             _check_size(result)
             return result
         if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
-            try:
-                result = _UNARY[type(node.op)](_ev(node.operand, depth + 1))
-            except (OverflowError, ValueError, ArithmeticError) as exc:
-                raise ToolError(f"arithmetic error: {exc}") from exc
-            _check_size(result)
-            return result
+                    op_func = _UNARY[type(node.op)]
+                    result = op_func(_ev(node.operand, depth + 1))
+                    _check_size(result)
+                    return result
         raise ToolError("unsupported expression")
 
     try:

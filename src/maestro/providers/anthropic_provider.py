@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterator
+from typing import cast
 
 from maestro.providers._http import HttpStreamError, post_json, stream_lines, validate_url
 from maestro.providers.base import LLMClient, LLMResponse, StreamEvent
@@ -237,7 +238,7 @@ class AnthropicClient(LLMClient):
         calls = [
             ToolCall(
                 name=str(p.get("name", "")),
-                arguments=p.get("input") if isinstance(p.get("input"), dict) else {},
+                arguments=cast(dict, p.get("input") if isinstance(p.get("input"), dict) else {}),
                 id=str(p.get("id", "")),
             )
             for p in parts

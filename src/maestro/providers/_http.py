@@ -86,7 +86,7 @@ def validate_url(url: str) -> None:
     except socket.gaierror as exc:
         raise ValueError(f"provider endpoint does not resolve: {exc}") from exc
     for info in infos:
-        address = ipaddress.ip_address(info[4][0].split("%", 1)[0])
+        address = ipaddress.ip_address(str(info[4][0]).split("%%", 1)[0])
         address = getattr(address, "ipv4_mapped", None) or address
         # Always forbidden: exfiltration/redirect targets.
         if (
@@ -98,7 +98,7 @@ def validate_url(url: str) -> None:
             raise ValueError("provider endpoint resolves to a prohibited address")
         if address.is_link_local:
             raise ValueError("provider endpoint resolves to a prohibited address")
-        if not allow_private and (address.is_private or address.is_loopback):
+        if not allow_private and (address.is_private or address.is_loopback):  # type: ignore[name-defined]
             raise ValueError(
                 "provider endpoint resolves to a private address; "
                 "set MAESTRO_ALLOW_PRIVATE_URLS=true to allow local endpoints (Ollama)"
