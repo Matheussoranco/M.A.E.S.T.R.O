@@ -1,36 +1,71 @@
-# A two-round debate adjudicated by a judge.  Good for hard questions where
+# A three-round debate adjudicated by a judge.  Good for hard questions where
 # cross-examination improves the answer.
 #
-# Run:  maestro run examples/debate_swarm.yaml "Should a small team build its own
-#       agent framework or adopt an existing one?"
+# Run:  maestro run examples/debate_swarm.yaml "Best architecture for a local-first agent framework?"
 
 name: debate-swarm
-description: Two debaters argue across rounds; a judge delivers the verdict.
+description: Three debaters argue across rounds; a judge delivers the verdict.
 topology: debate
 topology_params:
-  rounds: 2
+  rounds: 3
   judge: judge
 
 providers:
-  claude:
-    provider: anthropic
-    model: claude-sonnet-5
+  ollama:
+    provider: ollama
+    model: llama3.1:8b
+    base_url: http://127.0.0.1:11434
+    timeout: 180.0
+    options:
+      temperature: 0.7
 
 agents:
-  - name: pro
+  - name: debater_a
     type: llm
-    provider: claude
+    provider: ollama
     role: proponent
-    system_prompt: Argue in favor, concede nothing without reason.
+    max_tokens: 500
+    system_prompt: |
+      You are Debater A. Argue in favor of a modular, plugin-based architecture
+      for a local-first agent framework. Emphasize extensibility, separation of concerns,
+      and the ability to swap components (providers, tools, memory) without rewriting core logic.
+      Be specific about technical trade-offs. Concede points only when genuinely persuaded.
 
-  - name: con
+  - name: debater_b
     type: llm
-    provider: claude
+    provider: ollama
     role: opponent
-    system_prompt: Argue against, concede nothing without reason.
+    max_tokens: 500
+    system_prompt: |
+      You are Debater B. Argue in favor of a minimal, opinionated core architecture
+      for a local-first agent framework. Emphasize simplicity, zero-config defaults,
+      and avoiding the complexity tax of plugin systems. Be specific about technical trade-offs.
+      Concede points only when genuinely persuaded.
+
+  - name: debater_c
+    type: llm
+    provider: ollama
+    role: synthesizer
+    max_tokens: 500
+    system_prompt: |
+      You are Debater C. Synthesize a third perspective: a hybrid approach that keeps
+      a minimal core but defines clear extension points (interfaces, not plugins).
+      Argue for convention-over-configuration with escape hatches. Be specific about
+      technical trade-offs. Concede points only when genuinely persuaded.
 
   - name: judge
     type: llm
-    provider: claude
+    provider: ollama
     role: impartial judge
-    system_prompt: Weigh both sides and deliver a decisive, reasoned verdict.
+    max_tokens: 800
+    system_prompt: |
+      You are the Judge. Weigh all arguments across all rounds. Evaluate:
+      1. Technical soundness and specificity of each position
+      2. How well each debater engaged with others' arguments (not just restating)
+      3. Practical feasibility for a local-first framework
+      4. Clarity of the final recommendation
+      Deliver a decisive, reasoned verdict naming the best architecture approach
+      and explaining why it wins. Reference specific points from the debate.
+
+prices:
+  llama3.1:8b: [0, 0]
