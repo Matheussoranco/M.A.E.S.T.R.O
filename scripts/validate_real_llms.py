@@ -30,7 +30,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from maestro.orchestrator import Orchestrator
 
-
 # 10 varied prompts with expected specialists for decision pipeline
 DECISION_PIPELINE_TESTS = [
     {
@@ -136,7 +135,7 @@ def run_debate(spec_path: str, task: str) -> tuple[bool, str, str]:
         md_lines.append(f"**OK:** {r.ok()}")
         if r.error:
             md_lines.append(f"**Error:** {r.error}")
-        md_lines.append(f"**Output:**")
+        md_lines.append("**Output:**")
         md_lines.append("")
         md_lines.append(r.output or "(no output)")
         md_lines.append("")
@@ -261,7 +260,10 @@ def run_decision_pipeline(spec_path: str) -> dict:
         print()
 
     accuracy = correct / len(DECISION_PIPELINE_TESTS) * 100
-    print(f"[validate] Routing accuracy: {correct}/{len(DECISION_PIPELINE_TESTS)} = {accuracy:.1f}%")
+    print(
+    f"[validate] Routing accuracy: {correct}/{len(DECISION_PIPELINE_TESTS)} "
+    f"= {accuracy:.1f}%"
+)
 
     return {
         "success": True,
@@ -272,7 +274,12 @@ def run_decision_pipeline(spec_path: str) -> dict:
     }
 
 
-def generate_debate_report(validation_result: dict, output_dir: Path, date_str: str, time_str: str) -> tuple[Path, Path]:
+def generate_debate_report(
+    validation_result: dict,
+    output_dir: Path,
+    date_str: str,
+    time_str: str,
+) -> tuple[Path, Path]:
     """Generate markdown and JSONL reports for debate validation."""
     base_name = f"debate_validation_{date_str}_{time_str}"
 
@@ -301,7 +308,7 @@ def generate_debate_report(validation_result: dict, output_dir: Path, date_str: 
         md_lines.append(f"**OK:** {r.get('ok', False)}")
         if r.get("error"):
             md_lines.append(f"**Error:** {r.get('error')}")
-        md_lines.append(f"**Output:**")
+        md_lines.append("**Output:**")
         md_lines.append("")
         md_lines.append(r.get("output", "(no output)"))
         md_lines.append("")
@@ -344,7 +351,12 @@ def generate_debate_report(validation_result: dict, output_dir: Path, date_str: 
     return md_path, jsonl_path
 
 
-def generate_decision_pipeline_report(validation_result: dict, output_dir: Path, date_str: str, time_str: str) -> tuple[Path, Path]:
+def generate_decision_pipeline_report(
+    validation_result: dict,
+    output_dir: Path,
+    date_str: str,
+    time_str: str,
+) -> tuple[Path, Path]:
     """Generate markdown and JSONL reports for decision pipeline validation."""
     base_name = f"decision_pipeline_validation_{date_str}_{time_str}"
 
@@ -353,7 +365,10 @@ def generate_decision_pipeline_report(validation_result: dict, output_dir: Path,
         f"# Decision Pipeline Validation Report — {date_str}",
         "",
         f"**Timestamp:** {datetime.now().isoformat(timespec='seconds')}",
-        f"**Accuracy:** {validation_result['accuracy']:.1f}% ({validation_result['correct']}/{validation_result['total']})",
+        (
+            f"**Accuracy:** {validation_result['accuracy']:.1f}% "
+            f"({validation_result['correct']}/{validation_result['total']})"
+        ),
         "",
         "## Test Results",
         "",
@@ -434,7 +449,10 @@ def main():
     parser.add_argument(
         "--task",
         default="Best architecture for a local-first agent framework?",
-        help="Task for the debate (default: 'Best architecture for a local-first agent framework?')",
+        help=(
+            "Task for the debate "
+            "(default: 'Best architecture for a local-first agent framework?')"
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -472,7 +490,7 @@ def main():
     time_str = datetime.now().strftime("%H-%M-%S")
 
     if args.mode == "debate":
-        success, markdown, jsonl_line = run_debate(str(spec_path), args.task)
+        success, markdown, _ = run_debate(str(spec_path), args.task)
 
         if not success:
             print("[validate] Debate run failed.")
@@ -486,7 +504,13 @@ def main():
                     "task": args.task,
                     "topology": "debate",
                     "success": True,
-                    "final_output": markdown.split("## Final Verdict")[1].split("## Per-Agent Results")[0].strip() if "## Final Verdict" in markdown else "",
+                    "final_output": (
+                        markdown.split("## Final Verdict")[1]
+                        .split("## Per-Agent Results")[0]
+                        .strip()
+                        if "## Final Verdict" in markdown
+                        else ""
+                    ),
                     "agents": [],  # Will be extracted from markdown if needed
                     "trace": [],
                     "usage": {},
@@ -520,8 +544,11 @@ def main():
 
         # Exit with error code if accuracy is below threshold (e.g., 70%)
         if validation_result["accuracy"] < 70:
-            print(f"[validate] WARNING: Routing accuracy {validation_result['accuracy']:.1f}% below 70% threshold")
-            sys.exit(1)
+                print(
+                    f"[validate] WARNING: Routing accuracy "
+                    f"{validation_result['accuracy']:.1f}% below 70% threshold"
+                )
+                sys.exit(1)
 
         print("[validate] Validation completed successfully.")
         return 0

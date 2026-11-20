@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from maestro.orchestrator import Orchestrator
 
-
 # 10 varied prompts with expected specialists
 TEST_CASES = [
     {
@@ -96,7 +95,6 @@ def run_routing_test(spec_path: str, test_cases: list[dict]) -> dict:
 
     results = []
     correct = 0
-    fallback_count = 0
 
     for i, case in enumerate(test_cases, 1):
         prompt = case["prompt"]
@@ -130,19 +128,6 @@ def run_routing_test(spec_path: str, test_cases: list[dict]) -> dict:
 
         print(f"[validate]   Routed to: {routed_agent} {status}")
 
-        # Check if fallback was used (router agent failed/unavailable)
-        used_fallback = False
-        if result.tracer:
-            for event in result.tracer.to_list():
-                if event.get("event") == "agent_start" and event.get("name") == "router":
-                    # Check if router produced output
-                    pass
-                # We'll infer fallback from router not being in per_agent
-        if result.per_agent and result.per_agent[0].name != "router":
-            # In router topology, only the chosen agent runs, not the router
-            # But the router runs first internally. Let's check trace for router execution.
-            pass
-
         results.append({
             "test_num": i,
             "category": category,
@@ -169,7 +154,12 @@ def run_routing_test(spec_path: str, test_cases: list[dict]) -> dict:
     }
 
 
-def generate_report(validation_result: dict, output_dir: Path, date_str: str, time_str: str) -> tuple[Path, Path]:
+def generate_report(
+    validation_result: dict,
+    output_dir: Path,
+    date_str: str,
+    time_str: str,
+) -> tuple[Path, Path]:
     """Generate markdown and JSONL reports."""
     base_name = f"decision_pipeline_validation_{date_str}_{time_str}"
 
@@ -178,7 +168,10 @@ def generate_report(validation_result: dict, output_dir: Path, date_str: str, ti
         f"# Decision Pipeline Validation Report — {date_str}",
         "",
         f"**Timestamp:** {datetime.now().isoformat(timespec='seconds')}",
-        f"**Accuracy:** {validation_result['accuracy']:.1f}% ({validation_result['correct']}/{validation_result['total']})",
+        (
+            f"**Accuracy:** {validation_result['accuracy']:.1f}% "
+            f"({validation_result['correct']}/{validation_result['total']})"
+        ),
         "",
         "## Test Results",
         "",
@@ -295,7 +288,10 @@ def main():
 
     # Exit with error code if accuracy is below threshold (e.g., 70%)
     if validation_result["accuracy"] < 70:
-        print(f"[validate] WARNING: Routing accuracy {validation_result['accuracy']:.1f}% below 70% threshold")
+        print(
+            f"[validate] WARNING: Routing accuracy "
+            f"{validation_result['accuracy']:.1f}% below 70% threshold"
+        )
         sys.exit(1)
 
     print("[validate] Validation completed successfully.")
