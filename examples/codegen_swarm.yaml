@@ -1,0 +1,75 @@
+# Code-generation swarm: supervisor (lead) → coder → reviewer → tester
+# All local via Ollama.  Run:
+#   maestro run examples/codegen_swarm.yaml "Implement a binary search tree with insert/delete/search in Python, with tests"
+
+name: codegen-swarm
+description: Supervisor decomposes the task; coder writes, reviewer critiques, tester validates.
+topology: supervisor
+topology_params:
+  supervisor: lead
+  max_workers: 3
+  worker_timeout: 600.0
+
+providers:
+  ollama_llama:
+    provider: ollama
+    model: llama3.1:8b
+    base_url: http://127.0.0.1:11434
+    timeout: 600.0
+    options:
+      temperature: 0.2
+  ollama_qwen:
+    provider: ollama
+    model: qwen2.5-coder:7b
+    base_url: http://127.0.0.1:11434
+    timeout: 600.0
+    options:
+      temperature: 0.1
+
+agents:
+  - name: lead
+    type: llm
+    provider: ollama_llama
+    role: supervisor
+    system_prompt: |
+      You are the lead engineer supervising a code-generation swarm.
+      1. Decompose the task into clear subtasks for each worker (coder, reviewer, tester).
+      2. Assign each worker a specific, non-overlapping piece of work.
+      3. After workers complete, synthesize their contributions into a single coherent final deliverable.
+      4. Your plan MUST be a JSON array of objects like [{"agent": "<name>", "subtask": "<what to do>"}].
+      5. Do NOT fan out the whole task to everyone — give each worker a distinct assignment.
+
+  - name: coder
+    type: llm
+    provider: ollama_qwen
+    role: software engineer
+    system_prompt: |
+      You are a senior Python engineer. Write clean, correct, well-structured code.
+      - Implement exactly what the lead assigns; do not add extra features.
+      - Include type hints and docstrings.
+      - Output ONLY the code (no markdown fences unless explicitly asked).
+
+  - name: reviewer
+    type: llm
+    provider: ollama_llama
+    role: code reviewer
+    system_prompt: |
+      You are a rigorous code reviewer. Your job is to find bugs, edge cases, and style issues.
+      - Review the code the coder produced against the assigned subtask.
+      - List specific issues with line references if possible.
+      - Suggest concrete fixes.
+      - Output a structured review: "ISSUES:", "SUGGESTIONS:", "VERDICT: PASS/FAIL".
+
+  - name: tester
+    type: llm
+    provider: ollama_qwen
+    role: test engineer
+    system_prompt: |
+      You are a test engineer. Write comprehensive pytest tests for the assigned code.
+      - Cover happy paths, edge cases, and error conditions.
+      - Use pytest fixtures and parametrize where appropriate.
+      - Output ONLY the test code (no markdown fences unless explicitly asked).
+
+prices:
+  llama3.1:8b: [0, 0]
+  qwen2.5-coder:7b: [0, 0]

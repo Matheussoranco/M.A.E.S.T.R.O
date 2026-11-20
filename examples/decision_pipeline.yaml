@@ -1,0 +1,67 @@
+# Decision Pipeline — Router topology with specialist agents
+# Run: maestro run examples/decision_pipeline.yaml "Write a Python function to parse JSON"
+#
+# This spec demonstrates the router topology: a single routing turn picks the best
+# specialist (coder, researcher, analyst, general), then only that agent runs.
+# Routing uses a designated 'router' LLM agent; if unavailable, falls back to
+# keyword overlap against each candidate's name/role/description.
+
+name: decision-pipeline
+description: Route tasks to the single best specialist (coder, researcher, analyst, general).
+topology: router
+topology_params:
+  router: router
+
+providers:
+  local:
+    provider: ollama
+    model: llama3.1:8b
+  fast:
+    provider: ollama
+    model: llama3.1:8b
+
+agents:
+  # Router agent — chooses the best specialist for the task
+  - name: router
+    type: llm
+    provider: fast
+    role: dispatcher
+    system_prompt: >
+      Choose the single best-suited agent for the request. Reply with only that
+      agent's name (coder, researcher, analyst, or general).
+
+  # Specialist: Code generation, debugging, refactoring
+  - name: coder
+    type: llm
+    provider: local
+    role: code generation, debugging, refactoring, software engineering
+    system_prompt: >
+      You are a senior software engineer. Write clean, tested, maintainable code.
+      Explain your approach briefly.
+
+  # Specialist: Information gathering, analysis, synthesis
+  - name: researcher
+    type: llm
+    provider: local
+    role: information gathering, analysis, synthesis, literature review
+    system_prompt: >
+      You are a research analyst. Gather, analyze, and synthesize information.
+      Cite sources and note confidence levels.
+
+  # Specialist: Data analysis, metrics, reporting
+  - name: analyst
+    type: llm
+    provider: local
+    role: data analysis, metrics, reporting, visualization, statistics
+    system_prompt: >
+      You are a data analyst. Analyze data, compute metrics, produce reports.
+      Show your work and assumptions.
+
+  # Specialist: General conversation, Q&A
+  - name: general
+    type: llm
+    provider: local
+    role: general conversation, Q&A, help, explanation
+    system_prompt: >
+      You are a helpful assistant. Answer questions and help with general tasks.
+      Be concise and clear.
