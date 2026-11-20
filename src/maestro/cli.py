@@ -250,14 +250,9 @@ def cmd_agents(_args) -> int:
 
 
 def cmd_mcp_serve(_args) -> int:
-    from maestro.config import settings as cfg
     from maestro.mcp.server import serve
 
-    effective = _cli_settings(_args)
-    # The MCP server builds swarms internally from the module-global settings;
-    # propagate the explicit opt-in so `mcp-serve` honors the same policy.
-    cfg.settings.allow_stub_fallback = effective.allow_stub_fallback
-    serve()
+    serve(settings=_cli_settings(_args))
     return 0
 
 

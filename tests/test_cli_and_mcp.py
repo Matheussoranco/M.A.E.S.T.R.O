@@ -113,3 +113,35 @@ def test_mcp_list_topologies_tool():
 
 def test_mcp_initialized_notification_has_no_response():
     assert server._handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
+
+
+def test_mcp_cli_applies_stub_policy_per_invocation(monkeypatch, tmp_path, capsys):
+    import io
+    import sys
+
+    from maestro.orchestrator import Orchestrator
+
+    spec = tmp_path / "spec.json"
+    spec.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MAESTRO_MCP_SPEC_ROOTS", str(tmp_path))
+    monkeypatch.delenv("MAESTRO_ALLOW_STUB", raising=False)
+    seen = []
+
+    def capture_settings(path, settings=None):
+        seen.append(settings.allow_stub_fallback)
+        raise ValueError("captured policy")
+
+    monkeypatch.setattr(Orchestrator, "from_file", capture_settings)
+    request = {
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_run_spec",
+            "arguments": {"spec_path": str(spec), "task": "offline"},
+        },
+    }
+    for flags in (["--allow-stub"], []):
+        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(request) + "\n"))
+        assert main(["mcp-serve", *flags]) == 0
+        assert json.loads(capsys.readouterr().out)["id"] == 1
+    assert seen == [True, False]

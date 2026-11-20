@@ -99,10 +99,10 @@ def _safe_eval(expr: str) -> str:
             _check_size(result)
             return result
         if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
-                    op_func = _UNARY[type(node.op)]
-                    result = op_func(_ev(node.operand, depth + 1))
-                    _check_size(result)
-                    return result
+            op_func = _UNARY[type(node.op)]
+            result = op_func(_ev(node.operand, depth + 1))
+            _check_size(result)
+            return result
         raise ToolError("unsupported expression")
 
     try:

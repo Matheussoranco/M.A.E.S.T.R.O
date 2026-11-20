@@ -223,8 +223,8 @@ class EchoClient(LLMClient):
                 last_user = str(msg.get("content", ""))
                 break
         digest = hashlib.sha1(
-                    (system + "\n" + last_user).encode("utf-8", "replace"), usedforsecurity=False
-                ).hexdigest()[:8]
+            (system + "\n" + last_user).encode("utf-8", "replace"), usedforsecurity=False
+        ).hexdigest()[:8]
         who = self.persona or "echo"
         # A compact, deterministic "answer" that quotes the request back so the
         # reader can see the request actually reached this agent.
