@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 from maestro import __version__
+from maestro.config import Settings
 
 PROTOCOL_VERSION = "2024-11-05"
 
@@ -67,7 +68,7 @@ def _error(content: str) -> dict:
     return {"content": [{"type": "text", "text": content}], "isError": True}
 
 
-def _call_tool(name: str, args: dict) -> dict:
+def _call_tool(name: str, args: dict, settings: Settings | None = None) -> dict:
     try:
         if name == "maestro_run_demo":
             from maestro.demo import run_demo
@@ -78,7 +79,7 @@ def _call_tool(name: str, args: dict) -> dict:
             from maestro.orchestrator import Orchestrator
 
             spec_path = _safe_spec_path(args["spec_path"])
-            orch = Orchestrator.from_file(spec_path)
+            orch = Orchestrator.from_file(spec_path, settings=settings)
             res = orch.run(args["task"], trace=False)
             return _text(res.final or f"(no output — {res.error})")
         if name == "maestro_validate":
@@ -121,7 +122,7 @@ def _safe_spec_path(raw_path: str) -> str:
     return str(path)
 
 
-def _handle(msg: dict) -> dict | None:
+def _handle(msg: dict, settings: Settings | None = None) -> dict | None:
     mid = msg.get("id")
     method = msg.get("method")
     if method == "initialize":
@@ -140,7 +141,7 @@ def _handle(msg: dict) -> dict | None:
         return {"jsonrpc": "2.0", "id": mid, "result": {"tools": TOOLS}}
     if method == "tools/call":
         params = msg.get("params") or {}
-        result = _call_tool(params.get("name", ""), params.get("arguments") or {})
+        result = _call_tool(params.get("name", ""), params.get("arguments") or {}, settings)
         return {"jsonrpc": "2.0", "id": mid, "result": result}
     if method == "ping":
         return {"jsonrpc": "2.0", "id": mid, "result": {}}
@@ -153,7 +154,7 @@ def _handle(msg: dict) -> dict | None:
     return None
 
 
-def serve(stdin=None, stdout=None) -> None:
+def serve(stdin=None, stdout=None, *, settings: Settings | None = None) -> None:
     """Blocking stdio serve loop.  Reads newline-delimited JSON-RPC from stdin."""
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
@@ -165,7 +166,7 @@ def serve(stdin=None, stdout=None) -> None:
             msg = json.loads(line)
         except json.JSONDecodeError:
             continue
-        response = _handle(msg)
+        response = _handle(msg, settings)
         if response is not None:
             stdout.write(json.dumps(response) + "\n")
             stdout.flush()

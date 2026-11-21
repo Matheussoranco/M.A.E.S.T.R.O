@@ -167,12 +167,12 @@ class LLMAgent(Agent):
         return self._run_react(messages, context, usage)
 
     def _meta(self, response: LLMResponse, protocol: str, **extra) -> dict:
-            meta: dict[str, str] = {"model": response.model, "tool_protocol": protocol}
-            if isinstance(response.raw, dict) and response.raw.get("fallback"):
-                meta["fallback"] = "true"
-                meta["primary_error"] = response.raw.get("primary_error", "")
-            meta.update(extra)
-            return meta
+        meta: dict[str, str] = {"model": response.model, "tool_protocol": protocol}
+        if isinstance(response.raw, dict) and response.raw.get("fallback"):
+            meta["fallback"] = "true"
+            meta["primary_error"] = response.raw.get("primary_error", "")
+        meta.update(extra)
+        return meta
 
     def _run_native(
         self, messages: list[dict], context: RunContext | None, usage: list[Usage]
