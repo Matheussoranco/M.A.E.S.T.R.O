@@ -19,7 +19,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
@@ -45,19 +45,19 @@ class NoulLabels(BaseModel):
 
 
 class ChoiceQuestion(BaseModel):
-    type: str = "choice"
+    type: Literal["choice"] = "choice"
     instructions: str
     criteria: dict[str, str | None]
 
 
 class ScoreQuestion(BaseModel):
-    type: str = "score"
+    type: Literal["score"] = "score"
     instructions: str
     criteria: list[str]
 
 
 class NoulQuestion(BaseModel):
-    type: str = "noul"
+    type: Literal["noul"] = "noul"
     instructions: str
     criteria: NoulCriteria | None = None
     labels: NoulLabels | None = None
@@ -187,23 +187,23 @@ def system_one(
 
     # Convert request to MAESTRO task + context
     state = request.state
-    questions = {}
+    questions: dict[str, dict[str, Any]] = {}
 
     for qid, q in request.questions.items():
-        if q.type == "choice":
+        if isinstance(q, ChoiceQuestion):
             questions[qid] = {
                 "type": "choice",
                 "instructions": q.instructions,
                 "criteria": q.criteria,
             }
-        elif q.type == "score":
+        elif isinstance(q, ScoreQuestion):
             questions[qid] = {
                 "type": "score",
                 "instructions": q.instructions,
                 "criteria": q.criteria,
             }
-        elif q.type == "noul":
-            qdict = {"type": "noul", "instructions": q.instructions}
+        elif isinstance(q, NoulQuestion):
+            qdict: dict[str, Any] = {"type": "noul", "instructions": q.instructions}
             if q.criteria:
                 qdict["criteria"] = {"true": q.criteria.true, "false": q.criteria.false}
             if q.labels:
@@ -236,7 +236,7 @@ def system_one(
         raise HTTPException(status_code=500, detail="Decision agent returned invalid JSON") from err
 
     # Build Jev-compatible response
-    answers = {}
+    answers: dict[str, Answer] = {}
     for qid, ans in decision_data.get("answers", {}).items():
         atype = ans.get("type")
         if atype == "choice":

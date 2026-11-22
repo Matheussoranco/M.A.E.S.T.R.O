@@ -52,3 +52,21 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
+
+[tool.mypy]
+python_version = "3.10"
+
+# Targeted optional-dependency suppressions only (core runtime is stdlib-only).
+[[tool.mypy.overrides]]
+module = [
+    "laya",
+    "laya.*",
+    "onnxruntime",
+    "transformers",
+    "typesafe_sdk",
+    "fastapi",
+    "pydantic",
+    "uvicorn",
+    "yaml",
+]
+ignore_missing_imports = true
