@@ -102,3 +102,47 @@ def test_endpoint_keyless_direct_call(monkeypatch):
     with pytest.raises(HTTPException) as error:
         server.system_one(request, authorization="Bearer anything").send(None)
     assert error.value.status_code == 503
+
+
+def test_typed_question_models_and_decision_result_serialization():
+    from maestro.agents.decision_agent import (
+        ChoiceAnswer,
+        DecisionResult,
+        NoulAnswer,
+        ScoreAnswer,
+    )
+    from maestro.agents.registry import _parse_questions
+
+    req = server.SystemOneRequest(
+        state="status",
+        questions={
+            "c": {"type": "choice", "instructions": "Pick", "criteria": {"a": "A"}},
+            "s": {"type": "score", "instructions": "Rate", "criteria": ["low", "high"]},
+            "n": {"type": "noul", "instructions": "Check"},
+        },
+    )
+    assert isinstance(req.questions["c"], server.ChoiceQuestion)
+    assert isinstance(req.questions["s"], server.ScoreQuestion)
+    assert isinstance(req.questions["n"], server.NoulQuestion)
+
+    parsed = _parse_questions(
+        {
+            "c": {"type": "choice", "instructions": "Pick", "criteria": {"a": "A"}},
+            "s": {"type": "score", "instructions": "Rate", "criteria": ["low", "high"]},
+            "n": {"type": "noul", "instructions": "Check"},
+        }
+    )
+    assert set(parsed) == {"c", "s", "n"}
+
+    res = DecisionResult(
+        model="m1",
+        answers={
+            "c": ChoiceAnswer(choice="a", probabilities={"a": 1.0}, confidence=1.0),
+            "s": ScoreAnswer(score=1.0, probabilities={1: 1.0}, confidence=1.0, legend={1: "hi"}),
+            "n": NoulAnswer(noul=0.9),
+        },
+        usage={"input_tokens": 1, "output_tokens": 2},
+    )
+    payload = res._to_dict()
+    assert payload["model"] == "m1"
+    assert set(payload["answers"]) == {"c", "s", "n"}

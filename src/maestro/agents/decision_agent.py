@@ -97,21 +97,22 @@ class DecisionResult:
         return json.dumps(self._to_dict(), ensure_ascii=False, separators=(",", ":"))
 
     def _to_dict(self) -> dict[str, Any]:
-        out = {"answers": {}, "usage": self.usage}
+        answers_out: dict[str, dict[str, Any]] = {}
+        out: dict[str, Any] = {"answers": answers_out, "usage": self.usage}
         if self.model:
             out["model"] = self.model
         if self.routing:
             out["routing"] = self.routing
         for qid, ans in self.answers.items():
             if isinstance(ans, ChoiceAnswer):
-                out["answers"][qid] = {
+                answers_out[qid] = {
                     "type": "choice",
                     "choice": ans.choice,
                     "probabilities": ans.probabilities,
                     "confidence": ans.confidence,
                 }
             elif isinstance(ans, ScoreAnswer):
-                out["answers"][qid] = {
+                answers_out[qid] = {
                     "type": "score",
                     "score": ans.score,
                     "probabilities": ans.probabilities,
@@ -119,7 +120,7 @@ class DecisionResult:
                     "legend": ans.legend,
                 }
             elif isinstance(ans, NoulAnswer):
-                out["answers"][qid] = {
+                answers_out[qid] = {
                     "type": "noul",
                     "noul": ans.noul,
                 }
@@ -185,7 +186,7 @@ def _question_payloads(questions: dict[str, Question]) -> dict[str, dict]:
                 "criteria": q.criteria,
             }
         elif isinstance(q, NoulQuestion):
-            qdict = {"type": "noul", "instructions": q.instructions}
+            qdict: dict[str, Any] = {"type": "noul", "instructions": q.instructions}
             if q.criteria:
                 qdict["criteria"] = q.criteria
             if q.labels:
@@ -693,11 +694,14 @@ class JevAgent(DecisionAgent):
             usage = result.get("usage", {})
             model = result.get("model", self.model)
 
-        answers = {}
+        answers: dict[str, Answer] = {}
         for qid, ans in answers_dict.items():
             atype = ans.get("type") if isinstance(ans, dict) else getattr(ans, "type", None)
             if atype == "choice":
-                choice = ans.get("choice") if isinstance(ans, dict) else getattr(ans, "choice", "")
+                raw_choice = (
+                    ans.get("choice", "") if isinstance(ans, dict) else getattr(ans, "choice", "")
+                )
+                choice = str(raw_choice) if raw_choice is not None else ""
                 probabilities = (
                     ans.get("probabilities", {})
                     if isinstance(ans, dict)

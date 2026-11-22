@@ -122,8 +122,9 @@ class MCPAgent(Agent):
             self._send(proc, 2, "tools/call", {"name": self.tool, "arguments": args})
             result = self._await(reader, 2, deadline)
         finally:
-            with contextlib.suppress(Exception):
-                proc.stdin.close()
+            if proc.stdin is not None:
+                with contextlib.suppress(Exception):
+                    proc.stdin.close()
             with contextlib.suppress(Exception):
                 proc.terminate()
             with contextlib.suppress(Exception):
@@ -198,12 +199,11 @@ class _LineReader(threading.Thread):
 
     def run(self) -> None:
         try:
-            for line in self._stream:
-                if self._stop_event.is_set():
-                    break
-                self._q.put(line)
-        except Exception:
-            pass
+            with contextlib.suppress(Exception):
+                for line in self._stream:
+                    if self._stop_event.is_set():
+                        break
+                    self._q.put(line)
         finally:
             self._done.set()
             self._q.put(None)

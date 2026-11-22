@@ -56,7 +56,7 @@ def _parse_questions(raw: object) -> dict[str, Any]:
     if not raw or not isinstance(raw, dict):
         return {}
 
-    result = {}
+    result: dict[str, Any] = {}
     for qid, qspec in raw.items():
         if not isinstance(qspec, dict):
             continue
