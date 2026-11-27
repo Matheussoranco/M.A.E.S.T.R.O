@@ -1,0 +1,19 @@
+Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+
+Copyright (c) 2025-2026 Matheus Pullig Soranço de Carvalho (Matheus Soranço)
+Contact: matheussoranco@gmail.com
+
+Summary (not a substitute for the legal code):
+- You may use, copy, modify, merge, publish, distribute and share this
+  software/material, with attribution, for NONCOMMERCIAL purposes only.
+- No ShareAlike / copyleft requirement: derivatives you share do NOT have
+  to carry the same terms (difference vs the previous CC BY-NC-SA 4.0).
+- Commercial use (sale, paid SaaS/hosting, use in a commercial product,
+  training a commercial model for a third party, etc.) requires prior
+  written permission from the copyright holder.
+
+Full legal text:
+https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
+SPDX: CC-BY-NC-4.0
+Previous license for reference: CC-BY-NC-SA-4.0 (up to 2026-09-16).

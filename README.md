@@ -1,11 +1,11 @@
 # M.A.E.S.T.R.O.
 
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](LICENSE)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg)](LICENSE)
 
 **Multi-Agent Ensemble Swarm Task-Routing Orchestrator** — a provider-agnostic
 orchestrator that *instantiates and conducts agent swarms*, in the spirit of the
 multi-agent systems from MiniMax and Kimi, and is source-available for you to
-configure. It is licensed CC BY-NC 4.0, including a noncommercial restriction.
+configure. The project is licensed under AGPL-3.0-only.
 
 Describe a swarm as plain data; MAESTRO brings it to life. Any agent may be
 backed by **any** LLM — Anthropic, OpenAI, any OpenAI-compatible gateway (Groq,
@@ -294,26 +294,10 @@ src/maestro/
 
 ## License
 
-[**CC BY-NC 4.0**](https://creativecommons.org/licenses/by-nc/4.0/) — see [LICENSE](LICENSE).
+Original project code is licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`).
 
-Copyright © 2026 Matheus Soranzo <matheussoranco@gmail.com>
-`SPDX-License-Identifier: CC-BY-NC-4.0`
-Part of the I.S.A.A.C. / O.L.I.V.I.A. agent ecosystem.
+Copyright (c) 2025–2026 Matheus Pullig Soranço de Carvalho (Matheus Soranço).
 
-You may use, study, modify and share M.A.E.S.T.R.O. for any noncommercial
-purpose, on two conditions:
+The AGPL permits commercial and noncommercial use. If you modify the program and let users interact with that version remotely through a network, offer them its corresponding source under the AGPL. Distribution is subject to the license’s corresponding-source and notice requirements.
 
-- **NonCommercial** — not primarily for or directed towards commercial advantage
-  or monetary compensation (§1(k)).
-- **Attribution** — keep the copyright notice, the licence reference and the
-  warranty disclaimer, say if you changed it, and link back where practicable (§3(a)).
-
-There is no ShareAlike requirement: derivatives you share do not have to carry
-the same terms.
-
-Commercial use requires separate written permission from the copyright holder.
-Note the licence grants no patent or trademark rights (§2(b)(2)).
-
-Earlier versions were released under CC BY-NC-SA 4.0 (until 2026-09-16) and MIT
-before that; anyone who received those versions keeps their rights under those
-terms.
+Previously published versions retain their original terms. The previous [license text](LICENSES/CC-BY-NC-4.0.previous.txt) is retained for reference, and earlier releases were also published under CC BY-NC-SA 4.0 and MIT.

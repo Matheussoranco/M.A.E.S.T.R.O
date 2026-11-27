@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -8,12 +8,10 @@ version = "0.2.1"
 description = "Provider-agnostic orchestrator & instantiator of agent swarms (Anthropic, OpenAI, local LLMs, and sibling agents like I.S.A.A.C. and O.L.I.V.I.A.)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "CC-BY-NC-4.0" }
+license = "AGPL-3.0-only"
 authors = [{ name = "Matheus Soranzo", email = "matheussoranco@gmail.com" }]
 keywords = ["agents", "multi-agent", "swarm", "orchestration", "llm", "mcp", "local-llm"]
-# CC BY-NC 4.0 has no OSI classifier - "Other/Proprietary" is the correct
-# trove entry for a source-available, noncommercial-only licence.
-classifiers = ["License :: Other/Proprietary License"]
+license-files = ["LICENSE", "LICENSES/*"]
 
 # The core runtime is pure standard library — no required third-party deps.
 dependencies = []
